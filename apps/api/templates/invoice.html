@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoice {{invoice.invoice_number}}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 12px; color: #161616; background: white; padding: 40px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 3px solid #0f62fe; padding-bottom: 20px; }
+  .business-info h1 { font-size: 24px; font-weight: 700; color: #0f62fe; margin-bottom: 4px; }
+  .business-info p { color: #525252; font-size: 11px; line-height: 1.5; }
+  .invoice-meta { text-align: right; }
+  .invoice-meta .doc-type { font-size: 28px; font-weight: 300; color: #0f62fe; text-transform: uppercase; letter-spacing: 4px; }
+  .invoice-meta .invoice-number { font-size: 16px; font-weight: 600; color: #161616; margin-top: 8px; }
+  .invoice-meta table { margin-top: 12px; border-collapse: collapse; }
+  .invoice-meta table td { padding: 2px 8px; font-size: 11px; color: #525252; }
+  .invoice-meta table td:first-child { font-weight: 600; color: #161616; text-align: right; }
+
+  .parties { display: flex; gap: 40px; margin-bottom: 32px; }
+  .party-section { flex: 1; }
+  .party-section .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #8d8d8d; margin-bottom: 8px; }
+  .party-section h3 { font-size: 14px; font-weight: 600; color: #161616; margin-bottom: 4px; }
+  .party-section p { font-size: 11px; color: #525252; line-height: 1.6; }
+
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  .items-table thead { background: #0f62fe; color: white; }
+  .items-table thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .items-table thead th:last-child, .items-table thead th:nth-last-child(2), .items-table thead th:nth-last-child(3) { text-align: right; }
+  .items-table tbody tr { border-bottom: 1px solid #e0e0e0; }
+  .items-table tbody tr:nth-child(even) { background: #f4f4f4; }
+  .items-table tbody td { padding: 10px 12px; font-size: 11px; vertical-align: top; }
+  .items-table tbody td:last-child, .items-table tbody td:nth-last-child(2), .items-table tbody td:nth-last-child(3) { text-align: right; }
+
+  .totals-section { display: flex; justify-content: flex-end; margin-bottom: 32px; }
+  .totals-table { min-width: 280px; }
+  .totals-table tr td { padding: 6px 12px; font-size: 12px; }
+  .totals-table tr td:last-child { text-align: right; font-weight: 500; }
+  .totals-table .total-row { background: #0f62fe; color: white; font-size: 14px; font-weight: 700; }
+  .totals-table .total-row td { padding: 10px 12px; }
+
+  .payment-section { display: flex; gap: 32px; margin-bottom: 32px; }
+  .payment-details { flex: 1; }
+  .payment-details .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #8d8d8d; margin-bottom: 8px; }
+  .payment-details p { font-size: 11px; color: #525252; line-height: 1.6; }
+  .qr-section { display: flex; gap: 24px; }
+  .qr-item { text-align: center; }
+  .qr-item img { width: 100px; height: 100px; border: 1px solid #e0e0e0; padding: 4px; }
+  .qr-item .qr-label { font-size: 10px; color: #525252; margin-top: 4px; }
+
+  .notes-section { border-top: 1px solid #e0e0e0; padding-top: 16px; margin-bottom: 24px; }
+  .notes-section .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #8d8d8d; margin-bottom: 8px; }
+  .notes-section p { font-size: 11px; color: #525252; line-height: 1.6; }
+
+  .footer { border-top: 2px solid #e0e0e0; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .footer p { font-size: 10px; color: #8d8d8d; }
+  .einvoice-badge { background: #defbe6; color: #0e6027; padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+
+  @media print {
+    body { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="business-info">
+    <h1>{{business.business_name}}</h1>
+    <p>{{business.address_line1}}<br>{{business.address_line2}}<br>{{business.city}}, {{business.postcode}} {{business.state}}<br>{{business.country}}</p>
+    <p style="margin-top:6px">Tel: {{business.phone}} | Email: {{business.email}}</p>
+    <p>SSM: {{business.ssm_number}} | TIN: {{business.tin}}</p>
+  </div>
+  <div class="invoice-meta">
+    <div class="doc-type">{{invoice.type}}</div>
+    <div class="invoice-number">{{invoice.invoice_number}}</div>
+    <table>
+      <tr><td>Issue Date</td><td>{{invoice.issue_date}}</td></tr>
+      <tr><td>Due Date</td><td>{{invoice.due_date}}</td></tr>
+      <tr><td>Currency</td><td>{{invoice.currency}}</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- Parties -->
+<div class="parties">
+  <div class="party-section">
+    <div class="label">Bill To</div>
+    <h3>{{invoice.customer.name}}</h3>
+    <p>{{invoice.customer.address_line1}}<br>{{invoice.customer.city}}, {{invoice.customer.postcode}}<br>{{invoice.customer.country}}</p>
+    <p style="margin-top:4px">Email: {{invoice.customer.email}}</p>
+    <p>TIN: {{invoice.customer.tin}}</p>
+  </div>
+</div>
+
+<!-- Line Items Table -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th style="width:40%">Description</th>
+      <th style="width:10%">Qty</th>
+      <th style="width:15%">Unit Price</th>
+      <th style="width:10%">Tax %</th>
+      <th style="width:12%">Tax Amt</th>
+      <th style="width:13%">Total</th>
+    </tr>
+  </thead>
+  <tbody id="items">
+    <!-- Items rendered dynamically via JS or template engine -->
+  </tbody>
+</table>
+
+<!-- Totals -->
+<div class="totals-section">
+  <table class="totals-table">
+    <tr><td>Subtotal</td><td>{{invoice.currency}} {{invoice.subtotal}}</td></tr>
+    <tr><td>Tax</td><td>{{invoice.currency}} {{invoice.tax_total}}</td></tr>
+    <tr><td>Discount</td><td>{{invoice.currency}} {{invoice.discount_total}}</td></tr>
+    <tr class="total-row"><td>Total Due</td><td>{{invoice.currency}} {{invoice.total}}</td></tr>
+  </table>
+</div>
+
+<!-- Payment & QR -->
+<div class="payment-section">
+  <div class="payment-details">
+    <div class="label">Payment Details</div>
+    <p><strong>Bank:</strong> {{business.bank_name}}</p>
+    <p><strong>Account Name:</strong> {{business.bank_account_name}}</p>
+    <p><strong>Account No:</strong> {{business.bank_account_number}}</p>
+    <p style="margin-top:8px"><strong>Payment Terms:</strong> {{business.default_payment_terms}} days</p>
+  </div>
+  <div class="qr-section">
+    <div class="qr-item">
+      <img src="{{invoice.qrDataUrl}}" alt="DuitNow QR">
+      <div class="qr-label">DuitNow QR</div>
+    </div>
+  </div>
+</div>
+
+<!-- Notes -->
+<div class="notes-section">
+  <div class="label">Notes & Terms</div>
+  <p>{{invoice.notes}}</p>
+  <p style="margin-top:4px">{{invoice.terms}}</p>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <p>Generated by Personal Accountant | {{invoice.issue_date}}</p>
+  <div>
+    <span class="einvoice-badge">LHDN e-Invoice Compliant</span>
+  </div>
+</div>
+
+</body>
+</html>

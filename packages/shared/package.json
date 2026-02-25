@@ -1,0 +1,12 @@
+{
+  "name": "@personal-accountant/shared",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./constants/*": "./src/constants/*.js"
+  },
+  "scripts": {
+    "lint": "echo 'no lint'"
+  }
+}
