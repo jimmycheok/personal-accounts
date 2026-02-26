@@ -1,4 +1,9 @@
-import 'dotenv/config';
+// Load .env from repo root — works regardless of cwd or process manager.
+// If env vars are already set (Docker Compose, PM2 env_file), dotenv skips them (no override).
+import { config as loadEnv } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+loadEnv({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../../.env') });
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

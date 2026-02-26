@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: pa_user
       POSTGRES_PASSWORD: pa_password
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Host 5433 → container 5432 (avoids clash with local Postgres on 5432)
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -45,8 +45,8 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,19 +55,43 @@ services:
       gotenberg:
         condition: service_healthy
     environment:
+      # Database — always use Docker service hostnames inside the container
       DATABASE_URL: postgres://pa_user:pa_password@postgres:5432/personal_accountant
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: personal_accountant
       DB_USER: pa_user
       DB_PASSWORD: pa_password
+      # MongoDB and Gotenberg — Docker service hostnames
       MONGODB_URI: mongodb://admin:pa_mongo_pass@mongodb:27017/agenda?authSource=admin
       GOTENBERG_URL: http://gotenberg:3000
-      NODE_ENV: production
+      # Secrets — interpolated from host .env file
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      AES_SECRET_KEY: ${AES_SECRET_KEY}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Storage
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      UPLOAD_DIR: ./uploads
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Email
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@yourbusiness.com}
+      # App
+      NODE_ENV: ${NODE_ENV:-development} # or production, can be overridden by host .env
       API_PORT: 3001
-      FRONTEND_URL: http://localhost:5173
-    env_file:
-      - .env
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      MYINVOIS_SANDBOX_URL: ${MYINVOIS_SANDBOX_URL:-https://preprod-api.myinvois.hasil.gov.my}
+      MYINVOIS_PROD_URL: ${MYINVOIS_PROD_URL:-https://api.myinvois.hasil.gov.my}
     ports:
       - "3001:3001"
     volumes:
@@ -76,8 +100,8 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     ports:
       - "5173:80"
     environment:

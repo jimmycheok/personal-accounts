@@ -1,4 +1,5 @@
 import { Sequelize } from 'sequelize';
+// Env vars are loaded by app.js (entry point) before this module is imported.
 
 export const sequelize = new Sequelize(
   process.env.DATABASE_URL || 'postgres://pa_user:pa_password@localhost:5432/personal_accountant',

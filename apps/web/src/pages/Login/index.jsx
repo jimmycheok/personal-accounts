@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import logo from '../../assets/logo.svg';
 import {
   Form,
-  TextInput,
+  PasswordInput,
   Button,
   InlineNotification,
   Tile,
@@ -33,7 +34,10 @@ export default function LoginPage() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f4f4f4' }}>
       <Tile style={{ width: 400, padding: '2rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 300, marginBottom: '0.5rem', color: '#0f62fe' }}>Personal Accountant</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <img src={logo} alt="Personal Accountant" width="40" height="40" />
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 300, margin: 0, color: '#0f62fe' }}>Personal Accountant</h1>
+        </div>
         <p style={{ color: '#525252', marginBottom: '2rem', fontSize: '0.875rem' }}>Malaysia Sole Proprietor Accounting System</p>
 
         {error && (
@@ -45,7 +49,7 @@ export default function LoginPage() {
         )}
 
         <Form onSubmit={handleSubmit}>
-          <TextInput.PasswordInput
+          <PasswordInput
             id="password"
             labelText="Password"
             value={password}
@@ -53,6 +57,7 @@ export default function LoginPage() {
             placeholder="Enter your password"
             style={{ marginBottom: '1.5rem' }}
           />
+
           <Button type="submit" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>

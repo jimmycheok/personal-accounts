@@ -7,6 +7,7 @@ import {
   TabPanel,
   Tile,
   TextInput,
+  PasswordInput,
   Select,
   SelectItem,
   Button,
@@ -125,7 +126,7 @@ function EInvoiceTab() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    api.get('/settings/einvoice')
+    api.get('/settings/einvoice-config')
       .then(res => setForm(p => ({ ...p, ...res.data })))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -136,7 +137,7 @@ function EInvoiceTab() {
     setError('');
     setSuccess(false);
     try {
-      await api.put('/settings/einvoice', form);
+      await api.put('/settings/einvoice-config', form);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -150,7 +151,7 @@ function EInvoiceTab() {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await api.post('/settings/einvoice/test');
+      const res = await api.post('/settings/einvoice-config/test');
       setTestResult({ success: true, message: res.data.message || 'Connection successful!' });
     } catch (err) {
       setTestResult({ success: false, message: err.response?.data?.error || 'Connection failed' });
@@ -176,7 +177,7 @@ function EInvoiceTab() {
       <div className="grid-2" style={{ marginBottom: '1rem' }}>
         <TextInput id="s-ei-id" labelText="MyInvois Client ID" value={form.myinvois_client_id || ''}
           onChange={e => setForm(p => ({ ...p, myinvois_client_id: e.target.value }))} />
-        <TextInput.PasswordInput id="s-ei-secret" labelText="MyInvois Client Secret" value={form.myinvois_client_secret || ''}
+        <PasswordInput id="s-ei-secret" labelText="MyInvois Client Secret" value={form.myinvois_client_secret || ''}
           onChange={e => setForm(p => ({ ...p, myinvois_client_secret: e.target.value }))} />
       </div>
       <div style={{ marginBottom: '1rem' }}>
@@ -220,7 +221,7 @@ function StorageTab() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    api.get('/settings/storage')
+    api.get('/settings/storage-config')
       .then(res => setForm(p => ({ ...p, ...res.data })))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -231,7 +232,7 @@ function StorageTab() {
     setError('');
     setSuccess(false);
     try {
-      await api.put('/settings/storage', form);
+      await api.put('/settings/storage-config', form);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -278,7 +279,7 @@ function StorageTab() {
           <div className="grid-2" style={{ marginBottom: '1rem' }}>
             <TextInput id="s-ak" labelText="Access Key ID" value={form.storage_access_key || ''}
               onChange={e => setForm(p => ({ ...p, storage_access_key: e.target.value }))} />
-            <TextInput.PasswordInput id="s-sk" labelText="Secret Access Key" value={form.storage_secret_key || ''}
+            <PasswordInput id="s-sk" labelText="Secret Access Key" value={form.storage_secret_key || ''}
               onChange={e => setForm(p => ({ ...p, storage_secret_key: e.target.value }))} />
           </div>
           <div style={{ marginBottom: '1.5rem' }}>

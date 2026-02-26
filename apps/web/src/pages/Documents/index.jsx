@@ -134,7 +134,7 @@ export default function DocumentsPage() {
       const res = await api.get('/documents', {
         params: { category: categoryFilter !== 'all' ? categoryFilter : undefined },
       });
-      setDocuments(res.data.data || res.data);
+      setDocuments(res.data.documents || []);
     } catch (err) {
       console.error(err);
     } finally {

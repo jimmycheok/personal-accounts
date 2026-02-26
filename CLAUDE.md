@@ -91,14 +91,14 @@ Defined in `apps/api/jobs/`. Each job is a separate file that exports a `define*
 - **`MyInvoisService`** — singleton. Manages LHDN OAuth2 token (cached in `einvoice_configs` table with 60-min TTL). Builds UBL JSON documents, submits to LHDN, polls status. Client secret is AES-256-CBC encrypted (`iv_hex:ciphertext_hex` format) using `AES_SECRET_KEY` env var.
 - **`TaxCalculator`** — aggregates paid invoices (income) + expenses by `borang_b_section` + mileage logs. Entertainment expenses (D15) automatically get 50% deductibility applied.
 - **`StorageService`** — strategy pattern. Reads `storage_configs` table to determine backend (local/aws_s3/google_drive). Local files stored under `uploads/{type}/{year}/{month}/{uuid}.ext`.
-- **`PdfService`** — reads HTML templates from `apps/api/templates/`, does `{{placeholder}}` substitution, sends to Gotenberg via `chromiumly`.
+- **`PdfService`** — reads HTML templates from `apps/api/templates/`, does `{{placeholder}}` substitution, sends rendered HTML to Gotenberg via native `fetch` POST to `/forms/chromium/convert/html`. Supports invoice, quotation, credit note, and tax summary PDFs.
 - **`DuitNowService`** — generates EMVCo-compliant QR payloads with CRC-16 checksum.
 - **`OcrService`** — sends base64 image to GPT-4o with `response_format: json_object`. Returns `{ vendor, amount, date, category_suggestion, confidence }`. If `confidence < 70`, the frontend shows a blank manual form.
 
 ### Shared constants (`packages/shared/src/constants/`)
 - `taxBrackets.js` exports `calculateTax(chargeableIncome, year)` — used by both API `TaxCalculator` and web `Taxation` page
 - `borangBMapping.js` exports `DEFAULT_EXPENSE_CATEGORIES` (seeded to DB) and `BORANG_B_SECTIONS` (D1–D20 with labels and deductibility rules)
-- Import in API: `import { calculateTax } from '@personal-accountant/shared/constants/taxBrackets.js'`
+- Import in API: `import { calculateTax } from '@personal-accountant/shared/constants/taxBrackets'` (no `.js` extension — resolved via the package's `exports` field)
 
 ### Frontend routing
 `apps/web/src/App.jsx` — `PrivateRoute` checks `AuthContext`. If `onboardingCompleted` is false (from `AppSettingsContext`), the app should redirect to `/onboarding`. The onboarding wizard is full-screen (no `AppShell`); all other pages render inside `AppShell` (Carbon `Header` + `SideNav`).
@@ -107,7 +107,7 @@ Defined in `apps/api/jobs/`. Each job is a separate file that exports a `define*
 All go through `apps/web/src/services/api.js` — an Axios instance with base URL `VITE_API_URL/api/v1`, JWT `Authorization` header injected automatically, and a response interceptor that redirects to `/login` on 401.
 
 ### PDF generation
-Gotenberg runs at `GOTENBERG_URL` (port 3002 locally). `PdfService` uses `chromiumly`'s `HtmlConverter`. Templates are in `apps/api/templates/invoice.html` and `tax-summary.html`. The `{{invoice.items}}` array is not auto-rendered — if you extend templates, you'll need a real template engine or inject pre-rendered HTML fragments.
+Gotenberg runs at `GOTENBERG_URL` (port 3002 locally). `PdfService` posts HTML directly to Gotenberg's `/forms/chromium/convert/html` endpoint via native `fetch` (no `chromiumly` dependency). Templates are in `apps/api/templates/invoice.html` and `tax-summary.html`. The `{{invoice.items}}` array is not auto-rendered — if you extend templates, you'll need a real template engine or inject pre-rendered HTML fragments.
 
 ### E-invoice flow
 1. `POST /api/v1/invoices/:id/submit-einvoice` → `MyInvoisService.submitDocument(id)`

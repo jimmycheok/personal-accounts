@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logo from '../assets/logo.svg';
 import {
   Header,
   HeaderName,
@@ -50,6 +51,7 @@ export default function AppShell({ children }) {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Header aria-label="Personal Accountant">
         <HeaderName href="/" prefix="">
+          <img src={logo} alt="" width="24" height="24" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
           Personal Accountant
         </HeaderName>
         <HeaderNavigation aria-label="main navigation">
