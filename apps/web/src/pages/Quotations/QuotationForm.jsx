@@ -45,7 +45,7 @@ export default function QuotationFormPage() {
   const [lines, setLines] = useState([{ ...DEFAULT_LINE }]);
 
   useEffect(() => {
-    api.get('/customers').then(res => setCustomers(res.data.data || res.data)).catch(console.error);
+    api.get('/customers').then(res => setCustomers(res.data.customers || [])).catch(console.error);
     if (isEdit) {
       api.get(`/quotations/${id}`).then(res => {
         const q = res.data;

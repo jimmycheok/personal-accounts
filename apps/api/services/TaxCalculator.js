@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { Invoice, InvoiceItem, Expense, ExpenseCategory, MileageLog } from '../models/index.js';
-import { calculateTax, STANDARD_RELIEFS } from '@personal-accountant/shared/constants/taxBrackets.js';
-import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping.js';
+import { calculateTax, STANDARD_RELIEFS } from '@personal-accountant/shared/constants/taxBrackets';
+import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping';
 
 class TaxCalculator {
   /**

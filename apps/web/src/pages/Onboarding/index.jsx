@@ -4,6 +4,7 @@ import {
   ProgressStep,
   Tile,
   TextInput,
+  PasswordInput,
   Select,
   SelectItem,
   Button,
@@ -119,7 +120,7 @@ function StepEInvoice({ data, onChange }) {
           onChange={e => onChange('myinvois_client_id', e.target.value)}
           placeholder="Client ID from MyInvois portal"
         />
-        <TextInput.PasswordInput
+        <PasswordInput
           id="myinvois_client_secret"
           labelText="MyInvois Client Secret"
           value={data.myinvois_client_secret || ''}
@@ -186,7 +187,7 @@ function StepStorage({ data, onChange }) {
               value={data.storage_access_key || ''}
               onChange={e => onChange('storage_access_key', e.target.value)}
             />
-            <TextInput.PasswordInput
+            <PasswordInput
               id="storage_secret_key"
               labelText="Secret Access Key"
               value={data.storage_secret_key || ''}

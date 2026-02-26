@@ -249,7 +249,7 @@ export default function ExpensesPage() {
     setLoading(true);
     try {
       const res = await api.get('/expenses');
-      setExpenses(res.data.data || res.data);
+      setExpenses(res.data.expenses || []);
     } catch (err) {
       console.error(err);
     } finally {

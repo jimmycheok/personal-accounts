@@ -48,7 +48,7 @@ export default function QuotationsPage() {
     setLoading(true);
     try {
       const res = await api.get('/quotations', { params: { status: statusFilter !== 'all' ? statusFilter : undefined } });
-      setQuotations(res.data.data || res.data);
+      setQuotations(res.data.quotations || []);
     } catch (err) {
       console.error(err);
     } finally {

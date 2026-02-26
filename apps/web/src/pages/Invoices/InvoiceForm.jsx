@@ -55,7 +55,7 @@ export default function InvoiceFormPage() {
   const [lines, setLines] = useState([{ ...DEFAULT_LINE }]);
 
   useEffect(() => {
-    api.get('/customers').then(res => setCustomers(res.data.data || res.data)).catch(console.error);
+    api.get('/customers').then(res => setCustomers(res.data.customers || [])).catch(console.error);
     if (isEdit) {
       api.get(`/invoices/${id}`).then(res => {
         const inv = res.data;

@@ -1,5 +1,9 @@
-// CJS config for sequelize-cli
-require('dotenv').config();
+// CJS config for sequelize-cli only (not used at runtime).
+// Only loads .env if DATABASE_URL isn't already in the environment
+// (Docker and PM2 set it before this runs; local dev needs dotenv).
+if (!process.env.DATABASE_URL) {
+  require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
+}
 
 module.exports = {
   development: {

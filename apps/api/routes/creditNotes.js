@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verifyJwt } from '../middlewares/verifyJwt.js';
-import { CreditNote, CreditNoteItem, Customer, Invoice, BusinessProfile } from '../models/index.js';
+import { CreditNote, Customer, Invoice, BusinessProfile } from '../models/index.js';
 import { Op } from 'sequelize';
 import MyInvoisService from '../services/MyInvoisService.js';
 import PdfService from '../services/PdfService.js';
@@ -61,22 +61,17 @@ router.post('/', async (req, res, next) => {
     const prefix = profile?.credit_note_prefix || 'CN';
     const credit_note_number = data.credit_note_number || await getNextCreditNoteNumber(prefix);
 
-    const { items: calcItems, subtotal, taxTotal, total } = recalcTotals(items);
+    const { taxTotal, total } = recalcTotals(items);
 
     const creditNote = await CreditNote.create({
       ...data,
       credit_note_number,
-      subtotal,
-      tax_total: taxTotal,
-      total,
+      amount: data.amount ?? total,
+      tax_amount: data.tax_amount ?? taxTotal,
       status: 'draft',
     });
 
-    if (calcItems.length) {
-      await CreditNoteItem.bulkCreate(calcItems.map(item => ({ ...item, credit_note_id: creditNote.id })));
-    }
-
-    res.status(201).json(await CreditNote.findByPk(creditNote.id, { include: ['items', 'customer', 'invoice'] }));
+    res.status(201).json(await CreditNote.findByPk(creditNote.id, { include: ['customer', 'invoice'] }));
   } catch (err) { next(err); }
 });
 
@@ -84,7 +79,7 @@ router.post('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const cn = await CreditNote.findByPk(req.params.id, {
-      include: ['customer', 'invoice', 'items'],
+      include: ['customer', 'invoice'],
     });
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
     res.json(cn);
@@ -100,14 +95,12 @@ router.put('/:id', async (req, res, next) => {
 
     const { items, ...data } = req.body;
     if (items) {
-      await CreditNoteItem.destroy({ where: { credit_note_id: cn.id } });
-      const { items: calcItems, subtotal, taxTotal, total } = recalcTotals(items);
-      await CreditNoteItem.bulkCreate(calcItems.map(item => ({ ...item, credit_note_id: cn.id })));
-      Object.assign(data, { subtotal, tax_total: taxTotal, total });
+      const { taxTotal, total } = recalcTotals(items);
+      Object.assign(data, { amount: data.amount ?? total, tax_amount: data.tax_amount ?? taxTotal });
     }
 
     await cn.update(data);
-    res.json(await CreditNote.findByPk(cn.id, { include: ['items', 'customer', 'invoice'] }));
+    res.json(await CreditNote.findByPk(cn.id, { include: ['customer', 'invoice'] }));
   } catch (err) { next(err); }
 });
 
@@ -127,7 +120,7 @@ router.post('/:id/send', async (req, res, next) => {
   try {
     const cn = await CreditNote.findByPk(req.params.id);
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
-    await cn.update({ status: 'sent', sent_at: new Date() });
+    await cn.update({ status: 'submitted', sent_at: new Date() });
     res.json(cn);
   } catch (err) { next(err); }
 });
@@ -137,7 +130,7 @@ router.post('/:id/void', async (req, res, next) => {
   try {
     const cn = await CreditNote.findByPk(req.params.id);
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
-    await cn.update({ status: 'void', void_reason: req.body.reason });
+    await cn.update({ status: 'cancelled', void_reason: req.body.reason });
     res.json(cn);
   } catch (err) { next(err); }
 });
@@ -145,7 +138,7 @@ router.post('/:id/void', async (req, res, next) => {
 // GET /credit-notes/:id/pdf
 router.get('/:id/pdf', async (req, res, next) => {
   try {
-    const cn = await CreditNote.findByPk(req.params.id, { include: ['customer', 'invoice', 'items'] });
+    const cn = await CreditNote.findByPk(req.params.id, { include: ['customer', 'invoice'] });
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
     const business = await BusinessProfile.findOne();
     const pdfBuffer = await PdfService.generateCreditNotePdf(cn.toJSON(), business?.toJSON() || {});

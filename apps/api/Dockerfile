@@ -2,15 +2,25 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
-COPY package.json yarn.lock* package-lock.json* ./
-RUN npm install --production 2>/dev/null || yarn install --frozen-lockfile 2>/dev/null || npm install
+# Copy workspace root manifest + lockfile first (layer cache)
+COPY package.json yarn.lock* ./
 
-# Copy application code
-COPY . .
+# Copy only the package.json files needed for workspace install
+COPY packages/shared/package.json packages/shared/package.json
+COPY apps/api/package.json apps/api/package.json
+
+# Install all workspace dependencies from the repo root
+RUN yarn install --frozen-lockfile
+
+# Copy source code
+COPY packages/shared/ packages/shared/
+COPY apps/api/ apps/api/
 
 # Create uploads directory
-RUN mkdir -p uploads/temp uploads/receipts uploads/invoices uploads/documents uploads/statements
+RUN mkdir -p apps/api/uploads/temp apps/api/uploads/receipts \
+    apps/api/uploads/invoices apps/api/uploads/documents apps/api/uploads/statements
+
+WORKDIR /app/apps/api
 
 EXPOSE 3001
 

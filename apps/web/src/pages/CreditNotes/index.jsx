@@ -49,7 +49,7 @@ function NewCreditNoteModal({ open, onClose, onSuccess }) {
   useEffect(() => {
     if (open) {
       api.get('/invoices', { params: { status: 'paid', limit: 100 } })
-        .then(res => setInvoices(res.data.data || res.data))
+        .then(res => setInvoices(res.data.invoices || []))
         .catch(console.error);
     }
   }, [open]);
@@ -115,7 +115,7 @@ export default function CreditNotesPage() {
     setLoading(true);
     try {
       const res = await api.get('/credit-notes');
-      setCreditNotes(res.data.data || res.data);
+      setCreditNotes(res.data.creditNotes || []);
     } catch (err) {
       console.error(err);
     } finally {

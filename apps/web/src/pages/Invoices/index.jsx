@@ -59,8 +59,8 @@ export default function InvoicesListPage() {
       const res = await api.get('/invoices', {
         params: { search, page, limit: pageSize },
       });
-      setInvoices(res.data.data || res.data);
-      setTotal(res.data.total || (res.data.data || res.data).length);
+      setInvoices(res.data.invoices || []);
+      setTotal(res.data.total || 0);
     } catch (err) {
       console.error(err);
     } finally {
