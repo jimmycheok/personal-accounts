@@ -75,15 +75,16 @@ router.post('/import', upload.single('statement'), async (req, res, next) => {
       const credit = Math.abs(parseFloat(normalise(row, ['credit']) || 0));
       const debit = Math.abs(parseFloat(normalise(row, ['debit']) || 0));
       const rawAmount = parseFloat(normalise(row, ['amount', 'value']) || 0);
-      const balance = parseFloat(normalise(row, ['balance', 'runningbalance']) || 0) || null;
+      const balanceStr = normalise(row, ['balance', 'runningbalance']);
+      const balance = balanceStr !== null ? parseFloat(balanceStr) : null;
 
       return {
         bank_statement_id: statement.id,
         transaction_date: normalise(row, ['date', 'transactiondate', 'valuedate']) || new Date().toISOString().split('T')[0],
         description: normalise(row, ['description', 'particulars', 'narrative', 'details', 'reference']) || '',
         reference: normalise(row, ['reference', 'ref', 'chequeno']) || null,
-        credit: credit || (rawAmount > 0 ? rawAmount : null),
-        debit: debit || (rawAmount < 0 ? Math.abs(rawAmount) : null),
+        credit: credit > 0 ? credit : (rawAmount > 0 ? rawAmount : null),
+        debit: debit > 0 ? debit : (rawAmount < 0 ? Math.abs(rawAmount) : null),
         balance,
         is_reconciled: false,
       };

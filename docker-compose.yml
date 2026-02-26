@@ -87,7 +87,7 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@yourbusiness.com}
       # App
-      NODE_ENV: development # or production, can be overridden by host .env
+      NODE_ENV: ${NODE_ENV:-development} # or production, can be overridden by host .env
       API_PORT: 3001
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       MYINVOIS_SANDBOX_URL: ${MYINVOIS_SANDBOX_URL:-https://preprod-api.myinvois.hasil.gov.my}
