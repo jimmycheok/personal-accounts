@@ -70,7 +70,8 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 personal-accountant/
 ├── apps/
 │   ├── api/                  # Express.js backend (port 3001)
-│   │   ├── app.js            # Entry point
+│   │   ├── server.js         # Entry point (loads env, then imports app.js)
+│   │   ├── app.js            # Express app
 │   │   ├── config/           # Database, Agenda, storage config
 │   │   ├── controllers/      # Request handlers
 │   │   ├── jobs/             # Agenda scheduled jobs
@@ -85,7 +86,7 @@ personal-accountant/
 │   │
 │   └── web/                  # React frontend (port 5173)
 │       └── src/
-│           ├── components/   # AppShell (header + sidenav)
+│           ├── components/   # AppShell, AddExpenseModal, AttachmentsPanel, OCRAssistantModal, PaymentModal, CustomerQuickCreateModal
 │           ├── context/      # AuthContext, AppSettingsContext
 │           ├── pages/        # One folder per route
 │           └── services/     # Axios API client with JWT interceptor
@@ -116,13 +117,16 @@ personal-accountant/
 | `/onboarding` | 4-step first-run wizard (business info, e-invoice, storage, review) |
 | `/dashboard` | Financial overview, outstanding invoices, deadlines, cash flow snapshot |
 | `/invoices` | Invoice list, create, detail with payment history and e-invoice status |
-| `/quotations` | Quotation management with convert-to-invoice action |
+| `/quotations` | Quotation list + detail page with send/accept/reject/convert actions and attachments |
+| `/quotations/:id` | Quotation detail with line items, status actions, and file attachments |
 | `/credit-notes` | Credit note issuance and LHDN submission |
-| `/expenses` | Split-panel OCR receipt upload + expense table |
+| `/credit-notes/:id` | Credit note detail with status actions and file attachments |
+| `/expenses` | Expense list with view modal and inline attachment support; AI receipt scan via header |
 | `/taxation` | Borang B summary, relief inputs, tax estimate, PDF export |
 | `/cash-flow` | Projected vs actual cash flow line chart |
 | `/bank-reconciliation` | CSV import and transaction matching |
-| `/mileage` | Trip log with annual deduction summary |
+| `/customers` | Customer CRUD with search and inline quick-create from invoice/quotation forms |
+| `/mileage` | Trip log with modal entry form and per-trip detail view |
 | `/documents` | File attachments across all records |
 | `/settings` | Business profile, e-invoice config, storage, preferences |
 
@@ -168,7 +172,7 @@ docker compose up -d postgres mongodb gotenberg
 cd apps/api
 npx sequelize-cli db:migrate
 npx sequelize-cli db:seed:all
-node --watch app.js
+node --watch server.js
 ```
 
 Open a second terminal:
@@ -187,8 +191,16 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 | Document | Description |
 |---|---|
 | [Local Setup Guide](docs/local-setup.md) | Complete step-by-step setup for a fresh clone |
-| [Development Plan](docs/development-plan.md) | Module breakdown, architecture decisions, API conventions |
+| [Development Plan](docs/development-plan.md) | Module breakdown, architecture decisions, API conventions, spec corrections |
 | [CLAUDE.md](CLAUDE.md) | Codebase guidance for AI coding assistants |
+
+## Releases
+
+| Version | Date | Summary |
+|---|---|---|
+| [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
+| v1.1 | 2026-02-20 | Docker build, env loading, bank reconciliation refactor, UI fixes |
+| v1.0 | 2026-02-10 | Initial release |
 
 ---
 
