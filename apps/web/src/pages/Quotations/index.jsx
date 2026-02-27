@@ -126,11 +126,12 @@ export default function QuotationsPage() {
                     <TableRow {...getRowProps({ row })} key={row.id} style={{ cursor: 'pointer' }}>
                       {row.cells.map(cell => (
                         <TableCell key={cell.id}
-                          onClick={cell.info.header !== 'actions' ? () => navigate(`/quotations/${row.id}/edit`) : undefined}>
+                          onClick={cell.info.header !== 'actions' ? () => navigate(`/quotations/${row.id}`) : undefined}>
                           {cell.info.header === 'status' ? (
-                            <Tag type={STATUS_COLOR[cell.value] || 'gray'}>{cell.value}</Tag>
+                            <Tag type={STATUS_COLOR[cell.value] || 'gray'}>{cell.value.toUpperCase()}</Tag>
                           ) : cell.info.header === 'actions' ? (
                             <OverflowMenu flipped size="sm">
+                              <OverflowMenuItem itemText="View" onClick={() => navigate(`/quotations/${row.id}`)} />
                               <OverflowMenuItem itemText="Edit" onClick={() => navigate(`/quotations/${row.id}/edit`)} />
                               <OverflowMenuItem itemText="Convert to Invoice" onClick={() => handleConvert(row.id)} />
                             </OverflowMenu>

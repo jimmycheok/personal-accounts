@@ -13,14 +13,17 @@ import InvoiceFormPage from './pages/Invoices/InvoiceForm.jsx';
 import InvoiceDetailPage from './pages/Invoices/InvoiceDetail.jsx';
 import QuotationsPage from './pages/Quotations/index.jsx';
 import QuotationFormPage from './pages/Quotations/QuotationForm.jsx';
+import QuotationDetailPage from './pages/Quotations/QuotationDetail.jsx';
 import ExpensesPage from './pages/Expenses/index.jsx';
 import CreditNotesPage from './pages/CreditNotes/index.jsx';
+import CreditNoteDetailPage from './pages/CreditNotes/CreditNoteDetail.jsx';
 import TaxationPage from './pages/Taxation/index.jsx';
 import CashFlowPage from './pages/CashFlow/index.jsx';
 import BankReconciliationPage from './pages/BankReconciliation/index.jsx';
 import MileagePage from './pages/Mileage/index.jsx';
 import DocumentsPage from './pages/Documents/index.jsx';
 import SettingsPage from './pages/Settings/index.jsx';
+import CustomersPage from './pages/Customers/index.jsx';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -40,6 +43,7 @@ function AppRoutes() {
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/customers" element={<CustomersPage />} />
               <Route path="/invoices" element={<InvoicesListPage />} />
               <Route path="/invoices/new" element={<InvoiceFormPage />} />
               <Route path="/invoices/:id/edit" element={<InvoiceFormPage />} />
@@ -47,7 +51,9 @@ function AppRoutes() {
               <Route path="/quotations" element={<QuotationsPage />} />
               <Route path="/quotations/new" element={<QuotationFormPage />} />
               <Route path="/quotations/:id/edit" element={<QuotationFormPage />} />
+              <Route path="/quotations/:id" element={<QuotationDetailPage />} />
               <Route path="/credit-notes" element={<CreditNotesPage />} />
+              <Route path="/credit-notes/:id" element={<CreditNoteDetailPage />} />
               <Route path="/expenses" element={<ExpensesPage />} />
               <Route path="/taxation" element={<TaxationPage />} />
               <Route path="/cash-flow" element={<CashFlowPage />} />

@@ -47,11 +47,14 @@ export default function CashFlowPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.get(`/cash-flow?months=${months}`)
+    const now = new Date();
+    const to = now.toISOString().slice(0, 10);
+    const from = new Date(now.getFullYear(), now.getMonth() - (Number(months) - 1), 1).toISOString().slice(0, 10);
+    api.get(`/cash-flow/actual?from=${from}&to=${to}`)
       .then(res => {
         const cashFlowData = res.data.monthly || res.data;
         setData(cashFlowData);
-        setSummary(res.data.summary || null);
+        setSummary(res.data.totals || null);
       })
       .catch(() => {
         // Generate placeholder data client-side if API not ready

@@ -13,7 +13,7 @@ export async function list(req, res, next) {
       where,
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-      order: [['name', 'ASC']],
+      order: [['createdAt', 'DESC']],
     });
 
     res.json({ customers: rows, total: count, page: parseInt(page), limit: parseInt(limit) });

@@ -71,9 +71,10 @@ function UploadModal({ open, onClose, onSuccess }) {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('subject_type', 'general');
         formData.append('category', category);
         formData.append('description', description);
-        await api.post('/documents/upload', formData, {
+        await api.post('/documents', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
       }
@@ -106,6 +107,7 @@ function UploadModal({ open, onClose, onSuccess }) {
           labelTitle="Select Files"
           labelDescription="PDF, images, Word documents accepted"
           buttonLabel="Choose Files"
+          filenameStatus="edit"
           accept={['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.xlsx', '.csv']}
           multiple
           onChange={e => setFiles(Array.from(e.target.files || []))}

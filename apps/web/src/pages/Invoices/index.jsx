@@ -23,6 +23,7 @@ import {
 import { Add } from '@carbon/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api.js';
+import PaymentModal from '../../components/PaymentModal.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray',
@@ -52,6 +53,7 @@ export default function InvoicesListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+  const [paymentModal, setPaymentModal] = useState({ open: false, invoiceId: null, amountDue: 0 });
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -85,16 +87,9 @@ export default function InvoicesListPage() {
     }
   };
 
-  const handleMarkPaid = async (id) => {
-    try {
-      await api.post(`/invoices/${id}/payments`, {
-        amount: null, payment_date: new Date().toISOString().slice(0, 10),
-        payment_method: 'bank_transfer', notes: 'Marked as paid',
-      });
-      fetchInvoices();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to mark as paid');
-    }
+  const handleMarkPaid = (id) => {
+    const invoice = invoices.find(inv => String(inv.id) === String(id));
+    setPaymentModal({ open: true, invoiceId: id, amountDue: invoice?.amount_due ?? 0 });
   };
 
   const rows = invoices
@@ -106,10 +101,9 @@ export default function InvoicesListPage() {
       customer: inv.customer?.name || '-',
       issue_date: inv.issue_date,
       due_date: inv.due_date,
-      total_amount: `RM ${Number(inv.total_amount || 0).toFixed(2)}`,
-      amount_due: `RM ${Number(inv.amount_due || 0).toFixed(2)}`,
+      total_amount: `RM ${(parseFloat(inv.total) || 0).toFixed(2)}`,
+      amount_due: `RM ${(parseFloat(inv.amount_due) || 0).toFixed(2)}`,
       status: inv.status,
-      _raw: inv,
     }));
 
   return (
@@ -142,26 +136,34 @@ export default function InvoicesListPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {tableRows.map(row => (
-                      <TableRow {...getRowProps({ row })} key={row.id} style={{ cursor: 'pointer' }}>
-                        {row.cells.map(cell => (
-                          <TableCell key={cell.id}
-                            onClick={cell.info.header !== 'actions' ? () => navigate(`/invoices/${row.id}`) : undefined}
-                          >
-                            {cell.info.header === 'status' ? (
-                              <Tag type={STATUS_COLOR[cell.value] || 'gray'}>{cell.value}</Tag>
-                            ) : cell.info.header === 'actions' ? (
-                              <OverflowMenu flipped size="sm">
-                                <OverflowMenuItem itemText="View" onClick={() => navigate(`/invoices/${row.id}`)} />
-                                <OverflowMenuItem itemText="Edit" onClick={() => navigate(`/invoices/${row.id}/edit`)} />
-                                <OverflowMenuItem itemText="Mark Paid" onClick={() => handleMarkPaid(row.id)} />
-                                <OverflowMenuItem itemText="Void" hasDivider isDelete onClick={() => handleVoid(row.id)} />
-                              </OverflowMenu>
-                            ) : cell.value}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
+                    {tableRows.map(row => {
+                      const invoice = invoices.find(inv => String(inv.id) === row.id);
+
+                      return (
+                        <TableRow {...getRowProps({ row })} key={row.id} style={{ cursor: 'pointer' }}>
+                          {row.cells.map(cell => (
+                            <TableCell key={cell.id}
+                              onClick={cell.info.header !== 'actions' ? () => navigate(`/invoices/${row.id}`) : undefined}
+                            >
+                              {cell.info.header === 'status' ? (
+                                <Tag type={STATUS_COLOR[cell.value] || 'gray'}>{cell.value.toUpperCase()}</Tag>
+                              ) : cell.info.header === 'actions' ? (
+                                <OverflowMenu flipped size="sm">
+                                  <OverflowMenuItem itemText="View" onClick={() => navigate(`/invoices/${row.id}`)} />
+                                  {invoice?.status !== 'paid' && invoice?.amount_paid == 0 && (
+                                    <OverflowMenuItem itemText="Edit" onClick={() => navigate(`/invoices/${row.id}/edit`)} />
+                                  )}
+                                  {invoice?.status !== 'paid' && (
+                                    <OverflowMenuItem itemText="Mark Paid" onClick={() => handleMarkPaid(row.id)} />
+                                  )}
+                                  <OverflowMenuItem itemText="Void" hasDivider isDelete onClick={() => handleVoid(row.id)} />
+                                </OverflowMenu>
+                              ) : cell.value}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      )
+                    })}
                     {tableRows.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={HEADERS.length}>
@@ -185,6 +187,14 @@ export default function InvoicesListPage() {
           />
         </>
       )}
+
+      <PaymentModal
+        open={paymentModal.open}
+        onClose={() => setPaymentModal({ open: false, invoiceId: null, amountDue: 0 })}
+        invoiceId={paymentModal.invoiceId}
+        amountDue={paymentModal.amountDue}
+        onSuccess={fetchInvoices}
+      />
     </div>
   );
 }

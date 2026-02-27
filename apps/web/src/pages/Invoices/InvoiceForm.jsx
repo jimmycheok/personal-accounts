@@ -21,9 +21,11 @@ import {
   NumberInput,
   ComboBox,
 } from '@carbon/react';
-import { Add, TrashCan } from '@carbon/icons-react';
+import { format } from 'date-fns';
+import { Add, TrashCan, UserFollow } from '@carbon/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
+import CustomerQuickCreateModal from '../../components/CustomerQuickCreateModal.jsx';
 
 const DEFAULT_LINE = { description: '', quantity: 1, unit_price: 0, tax_rate: 0, amount: 0 };
 
@@ -42,6 +44,7 @@ export default function InvoiceFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
 
   const [form, setForm] = useState({
     customer_id: '',
@@ -148,15 +151,26 @@ export default function InvoiceFormPage() {
       <Tile style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
         <h3 className="form-section-title">Invoice Details</h3>
         <div className="grid-2" style={{ marginBottom: '1rem' }}>
-          <ComboBox
-            id="customer_id"
-            titleText="Customer *"
-            placeholder="Select or search customer"
-            items={customers}
-            itemToString={item => item ? item.name : ''}
-            selectedItem={selectedCustomer || null}
-            onChange={({ selectedItem }) => updateForm('customer_id', selectedItem?.id || '')}
-          />
+          <div>
+            <ComboBox
+              id="customer_id"
+              titleText="Customer *"
+              placeholder="Select or search customer"
+              items={customers}
+              itemToString={item => item ? item.name : ''}
+              selectedItem={selectedCustomer || null}
+              onChange={({ selectedItem }) => updateForm('customer_id', selectedItem?.id || '')}
+            />
+            <Button
+              kind="ghost"
+              size="sm"
+              renderIcon={UserFollow}
+              onClick={() => setShowNewCustomer(true)}
+              style={{ marginTop: '0.25rem', padding: '0.25rem 0.5rem' }}
+            >
+              New Customer
+            </Button>
+          </div>
           <TextInput
             id="po_number"
             labelText="PO Number"
@@ -166,13 +180,13 @@ export default function InvoiceFormPage() {
           />
         </div>
         <div className="grid-2" style={{ marginBottom: '1rem' }}>
-          <DatePicker datePickerType="single" value={form.issue_date} onChange={([d]) => {
-            if (d) updateForm('issue_date', d.toISOString().slice(0, 10));
+          <DatePicker datePickerType="single" value={new Date(form.issue_date)} onChange={([d]) => {
+            if (d) updateForm('issue_date', format(d, 'yyyy-MM-dd'));
           }}>
             <DatePickerInput id="issue_date" labelText="Issue Date *" placeholder="YYYY-MM-DD" />
           </DatePicker>
-          <DatePicker datePickerType="single" value={form.due_date} onChange={([d]) => {
-            if (d) updateForm('due_date', d.toISOString().slice(0, 10));
+          <DatePicker datePickerType="single" value={new Date(form.due_date)} onChange={([d]) => {
+            if (d) updateForm('due_date', format(d, 'yyyy-MM-dd'));
           }}>
             <DatePickerInput id="due_date" labelText="Due Date" placeholder="YYYY-MM-DD" />
           </DatePicker>
@@ -315,6 +329,16 @@ export default function InvoiceFormPage() {
           {saving ? 'Saving...' : 'Save & Send'}
         </Button>
       </div>
+
+      <CustomerQuickCreateModal
+        open={showNewCustomer}
+        onClose={() => setShowNewCustomer(false)}
+        onCreated={(newCustomer) => {
+          setCustomers(prev => [...prev, newCustomer]);
+          updateForm('customer_id', newCustomer.id);
+          setShowNewCustomer(false);
+        }}
+      />
     </div>
   );
 }

@@ -40,7 +40,7 @@ export async function list(req, res, next) {
       include: [{ model: Customer, as: 'customer', attributes: ['id', 'name', 'email'] }],
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-      order: [['issue_date', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
 
     res.json({ invoices: rows, total: count, page: parseInt(page), limit: parseInt(limit) });

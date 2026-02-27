@@ -29,7 +29,7 @@ export async function list(req, res, next) {
       include: [{ model: ExpenseCategory, as: 'category' }],
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-      order: [['expense_date', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
 
     res.json({ expenses: rows, total: count, page: parseInt(page) });

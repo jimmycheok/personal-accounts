@@ -22,7 +22,7 @@ npx sequelize-cli db:migrate
 npx sequelize-cli db:seed:all
 
 # Start API (port 3001) — from apps/api/
-node --watch app.js
+node --watch server.js
 
 # Start web dev server (port 5173) — from apps/web/
 npm run dev
@@ -99,6 +99,11 @@ Defined in `apps/api/jobs/`. Each job is a separate file that exports a `define*
 - `taxBrackets.js` exports `calculateTax(chargeableIncome, year)` — used by both API `TaxCalculator` and web `Taxation` page
 - `borangBMapping.js` exports `DEFAULT_EXPENSE_CATEGORIES` (seeded to DB) and `BORANG_B_SECTIONS` (D1–D20 with labels and deductibility rules)
 - Import in API: `import { calculateTax } from '@personal-accountant/shared/constants/taxBrackets'` (no `.js` extension — resolved via the package's `exports` field)
+
+### Customer management
+- Full CRUD at `apps/web/src/pages/Customers/index.jsx` — routed to `/customers`, accessible from sidebar (UserMultiple icon between Dashboard and Invoices).
+- Fields: name, customer_type (B2B/B2C/B2G), TIN, id_type/id_value, email, phone, full address, notes, is_active.
+- **Inline quick-create**: `apps/web/src/components/CustomerQuickCreateModal.jsx` — lightweight modal used in `InvoiceForm` and `QuotationForm`. A "New Customer" button sits beneath the customer ComboBox; on submit the new customer is auto-selected.
 
 ### Frontend routing
 `apps/web/src/App.jsx` — `PrivateRoute` checks `AuthContext`. If `onboardingCompleted` is false (from `AppSettingsContext`), the app should redirect to `/onboarding`. The onboarding wizard is full-screen (no `AppShell`); all other pages render inside `AppShell` (Carbon `Header` + `SideNav`).

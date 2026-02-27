@@ -19,7 +19,8 @@ router.get('/projection', async (req, res, next) => {
 });
 
 // GET /cash-flow/actual?from=2025-01-01&to=2025-12-31
-// Returns actual cash inflows (paid invoices) and outflows (expenses) grouped by month
+// Returns actual cash inflows (paid invoices) and outflows (expenses) grouped by month.
+// Every month in the from–to range is always present, zero-filled if no data.
 router.get('/actual', async (req, res, next) => {
   try {
     const now = new Date();
@@ -33,42 +34,44 @@ router.get('/actual', async (req, res, next) => {
           paid_at: { [Op.between]: [new Date(`${from}T00:00:00`), new Date(`${to}T23:59:59`)] },
         },
         attributes: ['paid_at', 'total'],
-        order: [['paid_at', 'ASC']],
       }),
       Expense.findAll({
-        where: {
-          expense_date: { [Op.between]: [from, to] },
-        },
+        where: { expense_date: { [Op.between]: [from, to] } },
         attributes: ['expense_date', 'amount_myr', 'amount'],
-        order: [['expense_date', 'ASC']],
       }),
     ]);
 
-    // Group by month (YYYY-MM)
+    // Pre-fill every month in the range with zeros so the chart always shows all slots
     const monthly = {};
+    const cursor = new Date(`${from.slice(0, 7)}-01`);
+    const end = new Date(`${to.slice(0, 7)}-01`);
+    while (cursor <= end) {
+      const key = cursor.toISOString().slice(0, 7); // YYYY-MM
+      const label = cursor.toLocaleString('en-MY', { month: 'short', year: '2-digit' }); // e.g. "Jan 25"
+      monthly[key] = { month: label, income: 0, expenses: 0, net: 0 };
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
 
     for (const inv of invoices) {
-      const month = new Date(inv.paid_at).toISOString().slice(0, 7);
-      if (!monthly[month]) monthly[month] = { month, inflow: 0, outflow: 0, net: 0 };
-      monthly[month].inflow += parseFloat(inv.total || 0);
+      const key = new Date(inv.paid_at).toISOString().slice(0, 7);
+      if (monthly[key]) monthly[key].income += parseFloat(inv.total || 0);
     }
 
     for (const exp of expenses) {
-      const month = exp.expense_date.slice(0, 7);
-      if (!monthly[month]) monthly[month] = { month, inflow: 0, outflow: 0, net: 0 };
-      monthly[month].outflow += parseFloat(exp.amount_myr || exp.amount || 0);
+      const key = exp.expense_date.slice(0, 7);
+      if (monthly[key]) monthly[key].expenses += parseFloat(exp.amount_myr || exp.amount || 0);
     }
 
-    const result = Object.values(monthly)
-      .map(m => ({ ...m, net: m.inflow - m.outflow }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+    const result = Object.keys(monthly)
+      .sort()
+      .map(k => ({ ...monthly[k], net: monthly[k].income - monthly[k].expenses }));
 
-    const totals = result.reduce(
-      (acc, m) => ({ inflow: acc.inflow + m.inflow, outflow: acc.outflow + m.outflow, net: acc.net + m.net }),
-      { inflow: 0, outflow: 0, net: 0 }
-    );
+    const totalIncome = result.reduce((s, m) => s + m.income, 0);
+    const totalExpenses = result.reduce((s, m) => s + m.expenses, 0);
+    const netCashFlow = totalIncome - totalExpenses;
+    const avgMonthlyNet = result.length ? netCashFlow / result.length : 0;
 
-    res.json({ from, to, monthly: result, totals });
+    res.json({ from, to, monthly: result, totals: { totalIncome, totalExpenses, netCashFlow, avgMonthlyNet } });
   } catch (err) { next(err); }
 });
 

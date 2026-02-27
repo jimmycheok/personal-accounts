@@ -13,12 +13,6 @@ import {
   TableHeader,
   TableBody,
   TableCell,
-  Modal,
-  TextInput,
-  Select,
-  SelectItem,
-  DatePicker,
-  DatePickerInput,
 } from '@carbon/react';
 import {
   Send,
@@ -30,79 +24,12 @@ import {
 } from '@carbon/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
+import PaymentModal from '../../components/PaymentModal.jsx';
+import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray', sent: 'blue', paid: 'green', overdue: 'red', void: 'magenta', partial: 'cyan',
 };
-
-function PaymentModal({ open, onClose, invoiceId, amountDue, onSuccess }) {
-  const [form, setForm] = useState({
-    amount: amountDue,
-    payment_date: new Date().toISOString().slice(0, 10),
-    payment_method: 'bank_transfer',
-    reference: '',
-    notes: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async () => {
-    setSaving(true);
-    setError('');
-    try {
-      await api.post(`/invoices/${invoiceId}/payments`, form);
-      onSuccess();
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to record payment');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={open}
-      onRequestClose={onClose}
-      modalHeading="Record Payment"
-      primaryButtonText={saving ? 'Saving...' : 'Record Payment'}
-      secondaryButtonText="Cancel"
-      onRequestSubmit={handleSubmit}
-      primaryButtonDisabled={saving}
-    >
-      {error && <InlineNotification kind="error" title={error} style={{ marginBottom: '1rem' }} />}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <TextInput
-          id="pay-amount"
-          labelText="Amount (RM)"
-          type="number"
-          step="0.01"
-          value={form.amount}
-          onChange={e => setForm(p => ({ ...p, amount: e.target.value }))}
-        />
-        <DatePicker datePickerType="single" value={form.payment_date}
-          onChange={([d]) => { if (d) setForm(p => ({ ...p, payment_date: d.toISOString().slice(0, 10) })); }}>
-          <DatePickerInput id="pay-date" labelText="Payment Date" placeholder="YYYY-MM-DD" />
-        </DatePicker>
-        <Select id="pay-method" labelText="Payment Method" value={form.payment_method}
-          onChange={e => setForm(p => ({ ...p, payment_method: e.target.value }))}>
-          <SelectItem value="bank_transfer" text="Bank Transfer" />
-          <SelectItem value="cash" text="Cash" />
-          <SelectItem value="cheque" text="Cheque" />
-          <SelectItem value="online" text="Online Payment" />
-          <SelectItem value="card" text="Credit/Debit Card" />
-        </Select>
-        <TextInput
-          id="pay-ref"
-          labelText="Reference / Transaction ID"
-          value={form.reference}
-          onChange={e => setForm(p => ({ ...p, reference: e.target.value }))}
-          placeholder="Optional reference"
-        />
-      </div>
-    </Modal>
-  );
-}
 
 export default function InvoiceDetailPage() {
   const { id } = useParams();
@@ -188,8 +115,8 @@ export default function InvoiceDetailPage() {
   if (loading) return <InlineLoading description="Loading invoice..." />;
   if (!invoice) return <div>Invoice not found</div>;
 
-  const subtotal = invoice.items?.reduce((s, i) => s + Number(i.unit_price) * Number(i.quantity), 0) || 0;
-  const tax = invoice.items?.reduce((s, i) => s + Number(i.unit_price) * Number(i.quantity) * (Number(i.tax_rate || 0) / 100), 0) || 0;
+  const subtotal = invoice.items?.reduce((s, i) => s + (parseFloat(i.subtotal) || 0), 0) || 0;
+  const tax = invoice.items?.reduce((s, i) => s + (parseFloat(i.tax_amount) || 0), 0) || 0;
 
   return (
     <div className="page-container">
@@ -282,7 +209,7 @@ export default function InvoiceDetailPage() {
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>{item.quantity}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>RM {Number(item.unit_price).toFixed(2)}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>{item.tax_rate || 0}%</td>
-                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>RM {Number(item.amount).toFixed(2)}</td>
+                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>RM {(parseFloat(item.total) || 0).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
@@ -298,19 +225,19 @@ export default function InvoiceDetailPage() {
             <tr>
               <td colSpan={4} style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, fontSize: '1rem' }}>Total</td>
               <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, fontSize: '1rem', color: '#0f62fe' }}>
-                RM {Number(invoice.total_amount).toFixed(2)}
+                RM {(parseFloat(invoice.total) || 0).toFixed(2)}
               </td>
             </tr>
             <tr>
               <td colSpan={4} style={{ padding: '0.5rem', textAlign: 'right', color: '#525252' }}>Amount Paid</td>
               <td style={{ padding: '0.5rem', textAlign: 'right', color: '#0e6027' }}>
-                RM {(Number(invoice.total_amount) - Number(invoice.amount_due)).toFixed(2)}
+                RM {(parseFloat(invoice.amount_paid) || 0).toFixed(2)}
               </td>
             </tr>
             <tr>
               <td colSpan={4} style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700 }}>Balance Due</td>
               <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#da1e28' }}>
-                RM {Number(invoice.amount_due).toFixed(2)}
+                RM {(parseFloat(invoice.amount_due) || 0).toFixed(2)}
               </td>
             </tr>
           </tfoot>
@@ -360,6 +287,10 @@ export default function InvoiceDetailPage() {
           <p style={{ color: '#525252', whiteSpace: 'pre-line' }}>{invoice.notes}</p>
         </Tile>
       )}
+
+      <Tile style={{ padding: '1.5rem', marginTop: '1.5rem' }}>
+        <AttachmentsPanel subjectType="invoice" subjectId={id} />
+      </Tile>
 
       <PaymentModal
         open={paymentModalOpen}

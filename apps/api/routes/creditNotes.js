@@ -8,6 +8,18 @@ import PdfService from '../services/PdfService.js';
 const router = Router();
 router.use(verifyJwt);
 
+// CreditNote has no customer_id — customer is accessed through invoice.customer
+const WITH_RELATIONS = {
+  include: [
+    {
+      model: Invoice,
+      as: 'invoice',
+      attributes: ['id', 'invoice_number'],
+      include: [{ model: Customer, as: 'customer', attributes: ['id', 'name', 'email'] }],
+    },
+  ],
+};
+
 async function getNextCreditNoteNumber(prefix = 'CN') {
   const last = await CreditNote.findOne({ order: [['id', 'DESC']] });
   const num = last ? parseInt(last.credit_note_number.replace(/[^0-9]/g, '')) + 1 : 1;
@@ -32,21 +44,17 @@ function recalcTotals(items) {
 // GET /credit-notes
 router.get('/', async (req, res, next) => {
   try {
-    const { status, customerId, from, to, page = 1, limit = 50 } = req.query;
+    const { status, from, to, page = 1, limit = 50 } = req.query;
     const where = {};
     if (status) where.status = status;
-    if (customerId) where.customer_id = customerId;
     if (from && to) where.issue_date = { [Op.between]: [from, to] };
 
     const { count, rows } = await CreditNote.findAndCountAll({
       where,
-      include: [
-        { model: Customer, as: 'customer', attributes: ['id', 'name', 'email'] },
-        { model: Invoice, as: 'invoice', attributes: ['id', 'invoice_number'] },
-      ],
+      ...WITH_RELATIONS,
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-      order: [['issue_date', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
 
     res.json({ creditNotes: rows, total: count, page: parseInt(page), limit: parseInt(limit) });
@@ -66,21 +74,20 @@ router.post('/', async (req, res, next) => {
     const creditNote = await CreditNote.create({
       ...data,
       credit_note_number,
+      issue_date: data.issue_date || new Date().toISOString().split('T')[0],
       amount: data.amount ?? total,
       tax_amount: data.tax_amount ?? taxTotal,
       status: 'draft',
     });
 
-    res.status(201).json(await CreditNote.findByPk(creditNote.id, { include: ['customer', 'invoice'] }));
+    res.status(201).json(await CreditNote.findByPk(creditNote.id, WITH_RELATIONS));
   } catch (err) { next(err); }
 });
 
 // GET /credit-notes/:id
 router.get('/:id', async (req, res, next) => {
   try {
-    const cn = await CreditNote.findByPk(req.params.id, {
-      include: ['customer', 'invoice'],
-    });
+    const cn = await CreditNote.findByPk(req.params.id, WITH_RELATIONS);
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
     res.json(cn);
   } catch (err) { next(err); }
@@ -100,7 +107,7 @@ router.put('/:id', async (req, res, next) => {
     }
 
     await cn.update(data);
-    res.json(await CreditNote.findByPk(cn.id, { include: ['customer', 'invoice'] }));
+    res.json(await CreditNote.findByPk(cn.id, WITH_RELATIONS));
   } catch (err) { next(err); }
 });
 
@@ -138,7 +145,7 @@ router.post('/:id/void', async (req, res, next) => {
 // GET /credit-notes/:id/pdf
 router.get('/:id/pdf', async (req, res, next) => {
   try {
-    const cn = await CreditNote.findByPk(req.params.id, { include: ['customer', 'invoice'] });
+    const cn = await CreditNote.findByPk(req.params.id, WITH_RELATIONS);
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
     const business = await BusinessProfile.findOne();
     const pdfBuffer = await PdfService.generateCreditNotePdf(cn.toJSON(), business?.toJSON() || {});

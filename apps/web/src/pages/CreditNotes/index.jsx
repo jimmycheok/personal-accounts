@@ -25,9 +25,10 @@ import {
   InlineNotification,
 } from '@carbon/react';
 import { Add } from '@carbon/icons-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api.js';
 
-const STATUS_COLOR = { draft: 'gray', issued: 'blue', applied: 'green', void: 'magenta' };
+const STATUS_COLOR = { draft: 'gray', issued: 'blue', submitted: 'green', void: 'magenta' };
 
 const HEADERS = [
   { key: 'credit_note_number', header: 'Credit Note #' },
@@ -106,6 +107,7 @@ function NewCreditNoteModal({ open, onClose, onSuccess }) {
 }
 
 export default function CreditNotesPage() {
+  const navigate = useNavigate();
   const [creditNotes, setCreditNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -134,7 +136,7 @@ export default function CreditNotesPage() {
     id: String(cn.id),
     credit_note_number: cn.credit_note_number,
     invoice: cn.invoice?.invoice_number || '-',
-    customer: cn.customer?.name || cn.invoice?.customer?.name || '-',
+    customer: cn.invoice?.customer?.name || '-',
     issue_date: cn.issue_date,
     amount: `RM ${Number(cn.amount || 0).toFixed(2)}`,
     reason: cn.reason || '-',
@@ -165,14 +167,15 @@ export default function CreditNotesPage() {
                 </TableHead>
                 <TableBody>
                   {tableRows.map(row => (
-                    <TableRow {...getRowProps({ row })} key={row.id}>
+                    <TableRow {...getRowProps({ row })} key={row.id} style={{ cursor: 'pointer' }}>
                       {row.cells.map(cell => (
-                        <TableCell key={cell.id}>
+                        <TableCell key={cell.id}
+                          onClick={cell.info.header !== 'actions' ? () => navigate(`/credit-notes/${row.id}`) : undefined}>
                           {cell.info.header === 'status'
-                            ? <Tag type={STATUS_COLOR[cell.value] || 'gray'}>{cell.value}</Tag>
+                            ? <Tag type={STATUS_COLOR[cell.value] || 'gray'}>{cell.value.toUpperCase()}</Tag>
                             : cell.info.header === 'actions'
                             ? <OverflowMenu flipped size="sm">
-                                <OverflowMenuItem itemText="View / Print" />
+                                <OverflowMenuItem itemText="View" onClick={() => navigate(`/credit-notes/${row.id}`)} />
                               </OverflowMenu>
                             : cell.value}
                         </TableCell>

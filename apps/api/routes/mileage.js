@@ -16,7 +16,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { from, to, year, purpose, page = 1, limit = 50 } = req.query;
     const where = {};
-    if (from && to) where.trip_date = { [Op.between]: [from, to] };
+    if (from && to) where.log_date = { [Op.between]: [from, to] };
     if (year) where.tax_year = parseInt(year);
     if (purpose) where.purpose = { [Op.iLike]: `%${purpose}%` };
 
@@ -24,7 +24,7 @@ router.get('/', async (req, res, next) => {
       where,
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-      order: [['trip_date', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
 
     res.json({ logs: rows, total: count, page: parseInt(page), limit: parseInt(limit) });
@@ -34,33 +34,23 @@ router.get('/', async (req, res, next) => {
 // POST /mileage
 router.post('/', async (req, res, next) => {
   try {
-    const {
-      trip_date,
-      from_location,
-      to_location,
-      distance_km,
-      purpose,
-      client_name,
-      rate_per_km,
-      notes,
-    } = req.body;
+    const { log_date, from_location, to_location, km: kmRaw, purpose, rate_per_km, notes } = req.body;
 
-    if (!trip_date || !distance_km) {
-      return res.status(400).json({ error: 'trip_date and distance_km are required' });
+    if (!log_date || !kmRaw) {
+      return res.status(400).json({ error: 'log_date and km are required' });
     }
 
-    const km = parseFloat(distance_km);
+    const km = parseFloat(kmRaw);
     const rate = parseFloat(rate_per_km) || DEFAULT_RATE_PER_KM;
     const deductible_amount = km * rate;
-    const tax_year = new Date(trip_date).getFullYear();
+    const tax_year = new Date(log_date).getFullYear();
 
     const log = await MileageLog.create({
-      trip_date,
+      log_date,
       from_location,
       to_location,
-      distance_km: km,
+      km,
       purpose,
-      client_name,
       rate_per_km: rate,
       deductible_amount,
       tax_year,
@@ -78,15 +68,15 @@ router.get('/summary', async (req, res, next) => {
 
     const logs = await MileageLog.findAll({ where: { tax_year: year } });
 
-    const totalKm = logs.reduce((sum, l) => sum + parseFloat(l.distance_km || 0), 0);
+    const totalKm = logs.reduce((sum, l) => sum + parseFloat(l.km || 0), 0);
     const totalDeductible = logs.reduce((sum, l) => sum + parseFloat(l.deductible_amount || 0), 0);
 
     // Group by month
     const byMonth = {};
     for (const log of logs) {
-      const month = log.trip_date.slice(0, 7);
+      const month = log.log_date.slice(0, 7);
       if (!byMonth[month]) byMonth[month] = { month, totalKm: 0, totalDeductible: 0, tripCount: 0 };
-      byMonth[month].totalKm += parseFloat(log.distance_km || 0);
+      byMonth[month].totalKm += parseFloat(log.km || 0);
       byMonth[month].totalDeductible += parseFloat(log.deductible_amount || 0);
       byMonth[month].tripCount += 1;
     }
@@ -116,12 +106,12 @@ router.put('/:id', async (req, res, next) => {
     const log = await MileageLog.findByPk(req.params.id);
     if (!log) return res.status(404).json({ error: 'Mileage log not found' });
 
-    const km = parseFloat(req.body.distance_km || log.distance_km);
+    const km = parseFloat(req.body.km || log.km);
     const rate = parseFloat(req.body.rate_per_km || log.rate_per_km || DEFAULT_RATE_PER_KM);
     const deductible_amount = km * rate;
-    const tax_year = req.body.trip_date ? new Date(req.body.trip_date).getFullYear() : log.tax_year;
+    const tax_year = req.body.log_date ? new Date(req.body.log_date).getFullYear() : log.tax_year;
 
-    await log.update({ ...req.body, distance_km: km, rate_per_km: rate, deductible_amount, tax_year });
+    await log.update({ ...req.body, km, rate_per_km: rate, deductible_amount, tax_year });
     res.json(log);
   } catch (err) { next(err); }
 });

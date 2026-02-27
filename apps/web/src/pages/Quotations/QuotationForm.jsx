@@ -12,9 +12,23 @@ import {
   InlineLoading,
   ComboBox,
 } from '@carbon/react';
-import { Add, TrashCan } from '@carbon/icons-react';
+import { Add, TrashCan, UserFollow } from '@carbon/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
+import CustomerQuickCreateModal from '../../components/CustomerQuickCreateModal.jsx';
+
+const parseDate = (iso) => {
+  if (!iso) return undefined;
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const fmtDate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 const DEFAULT_LINE = { description: '', quantity: 1, unit_price: 0, tax_rate: 0, amount: 0 };
 
@@ -33,6 +47,7 @@ export default function QuotationFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
 
   const [form, setForm] = useState({
     customer_id: '',
@@ -142,15 +157,26 @@ export default function QuotationFormPage() {
           />
         </div>
         <div className="grid-2" style={{ marginBottom: '1rem' }}>
-          <ComboBox
-            id="customer_id"
-            titleText="Customer *"
-            placeholder="Select customer"
-            items={customers}
-            itemToString={item => item ? item.name : ''}
-            selectedItem={selectedCustomer || null}
-            onChange={({ selectedItem }) => updateForm('customer_id', selectedItem?.id || '')}
-          />
+          <div>
+            <ComboBox
+              id="customer_id"
+              titleText="Customer *"
+              placeholder="Select customer"
+              items={customers}
+              itemToString={item => item ? item.name : ''}
+              selectedItem={selectedCustomer || null}
+              onChange={({ selectedItem }) => updateForm('customer_id', selectedItem?.id || '')}
+            />
+            <Button
+              kind="ghost"
+              size="sm"
+              renderIcon={UserFollow}
+              onClick={() => setShowNewCustomer(true)}
+              style={{ marginTop: '0.25rem', padding: '0.25rem 0.5rem' }}
+            >
+              New Customer
+            </Button>
+          </div>
           <Select id="currency" labelText="Currency" value={form.currency}
             onChange={e => updateForm('currency', e.target.value)}>
             <SelectItem value="MYR" text="MYR" />
@@ -159,12 +185,12 @@ export default function QuotationFormPage() {
           </Select>
         </div>
         <div className="grid-2">
-          <DatePicker datePickerType="single" value={form.issue_date}
-            onChange={([d]) => { if (d) updateForm('issue_date', d.toISOString().slice(0, 10)); }}>
+          <DatePicker datePickerType="single" value={parseDate(form.issue_date)}
+            onChange={([d]) => { if (d) updateForm('issue_date', fmtDate(d)); }}>
             <DatePickerInput id="issue_date" labelText="Issue Date" placeholder="YYYY-MM-DD" />
           </DatePicker>
-          <DatePicker datePickerType="single" value={form.valid_until}
-            onChange={([d]) => { if (d) updateForm('valid_until', d.toISOString().slice(0, 10)); }}>
+          <DatePicker datePickerType="single" value={parseDate(form.valid_until)}
+            onChange={([d]) => { if (d) updateForm('valid_until', fmtDate(d)); }}>
             <DatePickerInput id="valid_until" labelText="Valid Until" placeholder="YYYY-MM-DD" />
           </DatePicker>
         </div>
@@ -250,6 +276,16 @@ export default function QuotationFormPage() {
           {saving ? 'Saving...' : 'Save & Send'}
         </Button>
       </div>
+
+      <CustomerQuickCreateModal
+        open={showNewCustomer}
+        onClose={() => setShowNewCustomer(false)}
+        onCreated={(newCustomer) => {
+          setCustomers(prev => [...prev, newCustomer]);
+          updateForm('customer_id', newCustomer.id);
+          setShowNewCustomer(false);
+        }}
+      />
     </div>
   );
 }

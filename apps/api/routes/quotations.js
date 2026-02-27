@@ -16,7 +16,7 @@ router.get('/', async (req, res, next) => {
       include: [{ model: Customer, as: 'customer', attributes: ['id', 'name'] }],
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-      order: [['issue_date', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
     res.json({ quotations: rows, total: count });
   } catch (err) { next(err); }

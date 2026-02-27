@@ -1,9 +1,3 @@
-// Load .env from repo root — works regardless of cwd or process manager.
-// If env vars are already set (Docker Compose, PM2 env_file), dotenv skips them (no override).
-import { config as loadEnv } from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-loadEnv({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../../.env') });
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -72,7 +66,7 @@ app.use(`${v1}/customers`, customersRoutes);
 app.use(`${v1}/quotations`, quotationsRoutes);
 app.use(`${v1}/invoices`, invoicesRoutes);
 app.use(`${v1}/credit-notes`, creditNotesRoutes);
-app.use(`${v1}/invoices`, paymentsRoutes); // nested: /invoices/:id/payments
+app.use(`${v1}/invoices/:invoiceId/payments`, paymentsRoutes); // nested: /invoices/:invoiceId/payments
 app.use(`${v1}/expenses`, expensesRoutes);
 app.use(`${v1}/expense-categories`, expenseCategoriesRoutes);
 app.use(`${v1}/einvoice`, einvoiceRoutes);

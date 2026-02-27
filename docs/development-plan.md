@@ -62,6 +62,29 @@ First-run experience and ongoing system configuration.
 
 ---
 
+### Module 01A — Customer Management
+
+**Deliverables:**
+- Customer CRUD — full address, TIN, ID type/value, customer type (B2B / B2C / B2G), contact info, notes, active/inactive toggle
+- Customer list page (`/customers`) — searchable DataTable with pagination
+- Create / edit via modal with all fields; delete with confirmation
+- **Quick-create inline**: "New Customer" button inside Invoice and Quotation forms opens a lightweight modal to create a customer without leaving the current form; new customer is auto-selected on creation
+- `POST /customers/validate-tin` — proxies LHDN TIN validation via `MyInvoisService`
+
+**API routes (`/api/v1/customers`):**
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | List with `?search`, `?type`, `?page`, `?limit` |
+| POST | `/` | Create customer |
+| POST | `/validate-tin` | Validate TIN against LHDN |
+| GET | `/:id` | Get single customer |
+| PUT | `/:id` | Update customer |
+| DELETE | `/:id` | Delete customer |
+
+**Key files:** `apps/api/controllers/customersController.js`, `apps/api/routes/customers.js`, `apps/web/src/pages/Customers/index.jsx`, `apps/web/src/components/CustomerQuickCreateModal.jsx`
+
+---
+
 ### Module 02 — Invoice Management
 
 **Sales flow:** Quotation → (optional accept) → Invoice → Payment
@@ -304,3 +327,86 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 - Financial amounts: stored as `DECIMAL(15,2)` in PostgreSQL, returned as strings by Sequelize — always `parseFloat()` before arithmetic
 - Dates: stored as `DATEONLY` (YYYY-MM-DD strings), timestamps as `DATE`
 - All models use `underscored: true` — JS `camelCase` ↔ DB `snake_case`
+
+---
+
+## Specification Corrections (discovered during v1.2 dev)
+
+### MileageLog model — actual field names differ from route assumptions
+| Route assumed | Actual model field |
+|---|---|
+| `trip_date` | `log_date` |
+| `distance_km` | `km` |
+- `deductible_amount` is computed server-side from `km × rate_per_km`; do not send from client
+- `vehicle_type` and `round_trip` are **not** columns in `mileage_logs` — frontend-only UX fields
+- Default `rate_per_km` = `MILEAGE_RATE_PER_KM` env var, defaults to `0.60` (not `0.25` as written in the module spec; the `0.25` figure was an earlier draft)
+
+### Document model — subject_id sentinel for general uploads
+- `subject_id` is `NOT NULL` in the model — cannot be null
+- Standalone uploads from the Documents page use `subject_type = 'general'` and `subject_id = 0`
+- `POST /documents` now accepts optional `subject_id`; defaults to `0` when absent
+
+### CashFlow API — field naming
+- `GET /cash-flow/actual` returns `income` and `expenses` (not `inflow`/`outflow`)
+- Response always includes **all months** in the `from`–`to` range, zero-filled if no data
+- Totals object: `{ totalIncome, totalExpenses, netCashFlow, avgMonthlyNet }`
+- Month labels formatted as `"MMM YY"` (e.g. `"Jan 25"`) directly in the API response
+
+### CreditNote — no direct customer association
+- `CreditNote` has no `customer_id` column and no `customer` Sequelize association
+- Customer is only reachable via `creditNote.invoice.customer` (nested include)
+- Always include: `{ model: Invoice, include: [{ model: Customer }] }`
+
+### API entry point
+- `apps/api/server.js` is the actual entry point (loads dotenv, then dynamically imports `app.js`)
+- `apps/api/app.js` still exports the Express app but must not be run directly (ESM import hoisting prevents env vars from being read before service singletons initialize)
+
+### Payments route mount
+- `paymentsRouter` must be mounted at `/api/v1/invoices/:invoiceId/payments` (not `/api/v1/invoices`)
+- Router uses `mergeParams: true`; handlers are `/` (POST) and `/:id` (DELETE)
+
+---
+
+## Release Log
+
+### v1.2 — UI Polish, Modal Forms & Bug Fixes (2026-02-27)
+
+#### New components
+| Component | Description |
+|---|---|
+| `AddExpenseModal` | Add expense as a modal with inline file staging; attachments uploaded after expense creation |
+| `OCRAssistantModal` | Global AI receipt scan modal accessible from the header (Bot icon); extracted data pre-fills `AddExpenseModal` |
+| `PaymentModal` | Reusable payment recording modal used on Invoice list and Invoice detail |
+| `AttachmentsPanel` | Polymorphic attachment panel — works for invoice, quotation, credit_note, expense; supports upload, download, delete |
+| `CustomerQuickCreateModal` | Lightweight inline customer create used inside InvoiceForm and QuotationForm |
+
+#### New pages
+| Page | Route | Description |
+|---|---|---|
+| `QuotationDetail` | `/quotations/:id` | Full quotation detail with actions (send, accept, reject, convert) and AttachmentsPanel |
+| `CreditNoteDetail` | `/credit-notes/:id` | Credit note detail with status actions and AttachmentsPanel |
+| `Customers` | `/customers` | Full customer CRUD page |
+
+#### UX changes
+- **All list views**: default sort changed to `createdAt DESC` across invoices, quotations, credit notes, expenses, customers, mileage
+- **Expenses page**: row click / "View" overflow → view modal with AttachmentsPanel; "Add Expense" opens modal
+- **Mileage page**: "Log Trip" inline tile → modal form; row click / "View" overflow → trip detail modal
+- **Invoice list**: "Mark as Paid" opens PaymentModal instead of calling API directly
+- **Cash flow**: filter (3/6/12 months) always renders all months, zero-filled; chart field names corrected
+
+#### Bug fixes
+| Area | Bug | Fix |
+|---|---|---|
+| Payments | `POST /invoices/:id/payments` returned 404 | Fixed route mount path to include `/:invoiceId/payments` |
+| ENV vars | Services read empty env vars on startup | Created `server.js` entry point; dotenv loads before ESM imports |
+| MileageLog | POST returned `trip_date cannot be null` | Route field names corrected to match model (`log_date`, `km`) |
+| CreditNote | POST returned `issue_date cannot be null` | Backend defaults `issue_date` to today when not provided |
+| CreditNote | `Association with alias 'customer' does not exist` | Customer fetched via nested `Invoice → Customer` include |
+| Expenses | POST returned `vendor_name cannot be null` | Frontend form field names corrected (`vendor_name`, `expense_date`, `category_id`) |
+| Expense categories | Category dropdown empty | Fixed `res.data` (was `res.data.categories`); field `borang_b_section` (was `code`) |
+| Cash flow | GET returned 404 | URL corrected to `/cash-flow/actual?from=&to=` with computed date range |
+| Mileage | `entries.reduce is not a function` | API response read as `.data.logs` (was falling back to plain object) |
+| Documents | Upload returned 404 | URL corrected from `/documents/upload` to `/documents` |
+| Documents | `subject_id cannot be null` | Standalone uploads use `subject_id = 0` with `subject_type = 'general'` |
+| Documents | FileUploader showed infinite spinner | Added `filenameStatus="edit"` to Carbon FileUploader component |
+| DataTable | `row._raw` undefined | Looked up record from original state array using `find(e => String(e.id) === row.id)` |
