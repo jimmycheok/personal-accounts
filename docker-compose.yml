@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: personal_accountant
       POSTGRES_USER: pa_user
-      POSTGRES_PASSWORD: pa_password
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pa_password}
     ports:
       - "5433:5432"  # Host 5433 → container 5432 (avoids clash with local Postgres on 5432)
     volumes:
@@ -21,7 +21,7 @@ services:
     image: mongo:7-jammy
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: pa_mongo_pass
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-pa_mongo_pass}
     ports:
       - "27017:27017"
     volumes:
@@ -86,14 +86,14 @@ services:
         condition: service_healthy
     environment:
       # Database — always use Docker service hostnames inside the container
-      DATABASE_URL: postgres://pa_user:pa_password@postgres:5432/personal_accountant
+      DATABASE_URL: postgres://pa_user:${DB_PASSWORD:-pa_password}@postgres:5432/personal_accountant
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: personal_accountant
       DB_USER: pa_user
-      DB_PASSWORD: pa_password
+      DB_PASSWORD: ${DB_PASSWORD:-pa_password}
       # MongoDB and Gotenberg — Docker service hostnames
-      MONGODB_URI: mongodb://admin:pa_mongo_pass@mongodb:27017/agenda?authSource=admin
+      MONGODB_URI: mongodb://admin:${MONGO_PASSWORD:-pa_mongo_pass}@mongodb:27017/agenda?authSource=admin
       GOTENBERG_URL: http://gotenberg:3000
       # Secrets — interpolated from host .env file
       JWT_SECRET: ${JWT_SECRET}
