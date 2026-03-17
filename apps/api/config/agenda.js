@@ -7,7 +7,7 @@ export function getAgenda() {
 }
 
 export async function createAgenda() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://admin:pa_mongo_pass@localhost:27017/agenda?authSource=admin';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/agenda';
 
   agenda = new Agenda({
     db: {

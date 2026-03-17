@@ -43,7 +43,7 @@ router.get('/actual', async (req, res, next) => {
 
     // Pre-fill every month in the range with zeros so the chart always shows all slots
     const monthly = {};
-    const cursor = new Date(`${from.slice(0, 7)}-01`);
+    let cursor = new Date(`${from.slice(0, 7)}-01`);
     const end = new Date(`${to.slice(0, 7)}-01`);
     while (cursor <= end) {
       const key = cursor.toISOString().slice(0, 7); // YYYY-MM
@@ -63,7 +63,7 @@ router.get('/actual', async (req, res, next) => {
     }
 
     const result = Object.keys(monthly)
-      .sort()
+      .sort((a, b) => a.localeCompare(b))
       .map(k => ({ ...monthly[k], net: monthly[k].income - monthly[k].expenses }));
 
     const totalIncome = result.reduce((s, m) => s + m.income, 0);

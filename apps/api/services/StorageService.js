@@ -26,7 +26,9 @@ class StorageService {
     const storagePath = getStoragePath(subjectType, now.getFullYear(), now.getMonth() + 1, fileName);
 
     if (storageType === 'local') {
-      const fullPath = path.join(UPLOAD_DIR, storagePath);
+      const resolvedBase = path.resolve(UPLOAD_DIR);
+      const fullPath = path.resolve(resolvedBase, storagePath);
+      if (!fullPath.startsWith(resolvedBase + path.sep)) throw new Error('Invalid storage path');
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, fileBuffer);
       return { storageType, storagePath, fileName, originalName, mimeType, fileSize: fileBuffer.length };
@@ -79,7 +81,9 @@ class StorageService {
 
   async download(storagePath, storageType = 'local') {
     if (storageType === 'local') {
-      const fullPath = path.join(UPLOAD_DIR, storagePath);
+      const resolvedBase = path.resolve(UPLOAD_DIR);
+      const fullPath = path.resolve(resolvedBase, storagePath);
+      if (!fullPath.startsWith(resolvedBase + path.sep)) throw new Error('Invalid storage path');
       return fs.readFileSync(fullPath);
     }
 
@@ -119,7 +123,9 @@ class StorageService {
 
   async delete(storagePath, storageType = 'local') {
     if (storageType === 'local') {
-      const fullPath = path.join(UPLOAD_DIR, storagePath);
+      const resolvedBase = path.resolve(UPLOAD_DIR);
+      const fullPath = path.resolve(resolvedBase, storagePath);
+      if (!fullPath.startsWith(resolvedBase + path.sep)) throw new Error('Invalid storage path');
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
       return;
     }

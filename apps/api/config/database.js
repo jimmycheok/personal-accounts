@@ -2,7 +2,7 @@ import { Sequelize } from 'sequelize';
 // Env vars are loaded by app.js (entry point) before this module is imported.
 
 export const sequelize = new Sequelize(
-  process.env.DATABASE_URL || 'postgres://pa_user:pa_password@localhost:5432/personal_accountant',
+  process.env.DATABASE_URL || 'postgres://pa_user@localhost:5432/personal_accountant',
   {
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
@@ -21,7 +21,7 @@ export const sequelize = new Sequelize(
 // For sequelize-cli (CommonJS format via .sequelizerc)
 export default {
   development: {
-    url: process.env.DATABASE_URL || 'postgres://pa_user:pa_password@localhost:5432/personal_accountant',
+    url: process.env.DATABASE_URL || 'postgres://pa_user@localhost:5432/personal_accountant',
     dialect: 'postgres',
     logging: false,
   },
