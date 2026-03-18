@@ -12,7 +12,7 @@ export const sequelize = new Sequelize(
       acquire: 30000,
       idle: 10000,
     },
-    dialectOptions: process.env.NODE_ENV === 'production' ? {
+    dialectOptions: process.env.DB_SSL === 'true' ? {
       ssl: { require: true, rejectUnauthorized: false },
     } : {},
   }
@@ -28,7 +28,7 @@ export default {
   production: {
     url: process.env.DATABASE_URL,
     dialect: 'postgres',
-    dialectOptions: { ssl: { require: true, rejectUnauthorized: false } },
+    dialectOptions: process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {},
     logging: false,
   },
 };
