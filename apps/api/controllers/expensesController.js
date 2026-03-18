@@ -94,17 +94,17 @@ export async function ocrReceipt(req, res, next) {
     // Upload to storage if confidence >= 70
     let storagePath = null;
     if (result.confidence >= 70) {
-      const buffer = fs.readFileSync(req.file.path);
+      const buffer = await fs.promises.readFile(req.file.path);
       const stored = await StorageService.upload(buffer, req.file.originalname, req.file.mimetype, 'receipts');
       storagePath = stored.storagePath;
     }
 
     // Cleanup temp file
-    fs.unlinkSync(req.file.path);
+    await fs.promises.unlink(req.file.path);
 
     res.json({ ...result, storagePath, requiresManualInput: result.confidence < 70 });
   } catch (err) {
-    if (req.file?.path) try { fs.unlinkSync(req.file.path); } catch {}
+    if (req.file?.path) try { await fs.promises.unlink(req.file.path); } catch {}
     next(err);
   }
 }

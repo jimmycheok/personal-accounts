@@ -57,7 +57,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 | Backend | Express.js v5 (ES modules) |
 | Database | PostgreSQL 15 (Sequelize v6) |
 | Job scheduler | Agenda + MongoDB 7 |
-| PDF generation | Gotenberg v8 (Docker) + chromiumly |
+| PDF generation | Gotenberg v8 (Docker) |
 | OCR | OpenAI GPT-4o Vision |
 | Authentication | JWT (single owner) |
 | Encryption | AES-256-CBC (for LHDN credentials at rest) |
@@ -198,6 +198,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 | Version | Date | Summary |
 |---|---|---|
+| [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |
 | [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
 | v1.1 | 2026-02-20 | Docker build, env loading, bank reconciliation refactor, UI fixes |
 | v1.0 | 2026-02-10 | Initial release |

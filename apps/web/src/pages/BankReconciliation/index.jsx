@@ -84,7 +84,7 @@ export default function BankReconciliationPage() {
       setResults(prev => ({
         ...prev,
         transactions: prev.transactions.map(tx =>
-          tx.id === txId ? { ...tx, match_status: tx.match_status === 'ignored' ? 'unmatched' : 'ignored' } : tx
+          String(tx.id) === String(txId) ? { ...tx, match_status: tx.match_status === 'ignored' ? 'unmatched' : 'ignored' } : tx
         ),
       }));
     } catch (err) {
@@ -189,7 +189,7 @@ export default function BankReconciliationPage() {
                         ))}
                         <TableCell>
                           <Button kind="ghost" size="sm"
-                            onClick={() => handleToggleIgnore(row.cells.find(c => c.info.header === 'match')?.id)}>
+                            onClick={() => handleToggleIgnore(row.id)}>
                             Ignore
                           </Button>
                         </TableCell>
