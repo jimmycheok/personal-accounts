@@ -1,0 +1,137 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: personal_accountant
+      POSTGRES_USER: pa_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pa_user -d personal_accountant"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7-jammy
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY};
+      mc mb --ignore-existing local/${MINIO_BUCKET:-pa-documents};
+      exit 0;
+      "
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-pa-documents}
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      gotenberg:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgres://pa_user:${DB_PASSWORD}@postgres:5432/personal_accountant
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: personal_accountant
+      DB_USER: pa_user
+      DB_PASSWORD: ${DB_PASSWORD}
+      # MongoDB & Gotenberg
+      MONGODB_URI: mongodb://admin:${MONGO_PASSWORD}@mongodb:27017/agenda?authSource=admin
+      GOTENBERG_URL: http://gotenberg:3000
+      # Secrets
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      AES_SECRET_KEY: ${AES_SECRET_KEY}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      # Storage (MinIO)
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-pa-documents}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
+      # Email
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@yourbusiness.com}
+      # App
+      NODE_ENV: production
+      API_PORT: 3001
+      FRONTEND_URL: ${FRONTEND_URL}
+      MYINVOIS_SANDBOX_URL: ${MYINVOIS_SANDBOX_URL:-https://preprod-api.myinvois.hasil.gov.my}
+      MYINVOIS_PROD_URL: ${MYINVOIS_PROD_URL:-https://api.myinvois.hasil.gov.my}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  minio_data:
