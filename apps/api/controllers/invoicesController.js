@@ -1,4 +1,4 @@
-import { Invoice, InvoiceItem, Customer, Payment, BusinessProfile } from '../models/index.js';
+import { Invoice, InvoiceItem, Customer, Payment, BusinessProfile, EinvoiceSubmission } from '../models/index.js';
 import { Op } from 'sequelize';
 import { writeAuditLog } from '../middlewares/auditLog.js';
 import PdfService from '../services/PdfService.js';
@@ -245,7 +245,6 @@ export async function submitEinvoice(req, res, next) {
 
 export async function getEinvoiceStatus(req, res, next) {
   try {
-    const { EinvoiceSubmission } = await import('../models/index.js');
     const submission = await EinvoiceSubmission.findOne({
       where: { invoice_id: req.params.id },
       order: [['id', 'DESC']],
@@ -265,7 +264,6 @@ export async function getEinvoiceStatus(req, res, next) {
 
 export async function cancelEinvoice(req, res, next) {
   try {
-    const { EinvoiceSubmission } = await import('../models/index.js');
     const submission = await EinvoiceSubmission.findOne({
       where: { invoice_id: req.params.id },
       order: [['id', 'DESC']],
@@ -282,9 +280,7 @@ export async function getNextNumber(req, res, next) {
   try {
     const profile = await BusinessProfile.findOne();
     const prefix = profile?.invoice_prefix || 'INV';
-    const last = await Invoice.findOne({ order: [['id', 'DESC']] });
-    const num = last ? parseInt(last.invoice_number.replace(/[^0-9]/g, '')) + 1 : 1;
-    res.json({ nextNumber: `${prefix}-${String(num).padStart(4, '0')}` });
+    res.json({ nextNumber: await getNextInvoiceNumber(prefix) });
   } catch (err) {
     next(err);
   }

@@ -246,7 +246,7 @@ export default function DocumentsPage() {
                 </TableHead>
                 <TableBody>
                   {tableRows.map(row => {
-                    const docData = filtered[tableRows.indexOf(row)];
+                    const docData = documents.find(d => String(d.id) === row.id);
                     return (
                       <TableRow {...getRowProps({ row })} key={row.id}>
                         {row.cells.map(cell => (

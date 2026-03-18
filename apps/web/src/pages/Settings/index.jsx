@@ -17,7 +17,7 @@ import {
   Tag,
   TextArea,
 } from '@carbon/react';
-import { Save, Checkmark } from '@carbon/icons-react';
+import { Save } from '@carbon/icons-react';
 import api from '../../services/api.js';
 
 function BusinessProfileTab() {
@@ -375,11 +375,9 @@ function PreferencesTab() {
         </div>
       )}
 
-      <div style={{ marginBottom: '1.5rem' }}>
-        <Toggle id="s-change-pw-toggle" labelText="Password Change" labelA="" labelB=""
-          toggled={false} onToggle={() => {}} />
-        <p style={{ fontSize: '0.75rem', color: '#8d8d8d', marginTop: '0.5rem' }}>
-          To change your password, use the API endpoint <code>PUT /api/v1/auth/change-password</code>.
+      <div style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', background: '#f4f4f4', borderRadius: '4px' }}>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#525252' }}>
+          To change your password, use <strong>Settings → Security</strong> or call <code>PUT /api/v1/auth/change-password</code>.
         </p>
       </div>
 

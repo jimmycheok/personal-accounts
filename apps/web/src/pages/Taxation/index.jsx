@@ -13,6 +13,7 @@ import {
 } from '@carbon/react';
 import { Calculator } from '@carbon/icons-react';
 import api from '../../services/api.js';
+import { calculateTax, TAX_BRACKETS_AY2024 } from '@personal-accountant/shared/constants/taxBrackets';
 
 const PERSONAL_RELIEFS = [
   { id: 'self', label: 'Self & Dependent (Individual Relief)', max: 9000, default: 9000 },
@@ -30,29 +31,6 @@ const PERSONAL_RELIEFS = [
   { id: 'zakat', label: 'Zakat / Fitrah', max: null, default: 0 },
 ];
 
-const MY_TAX_BRACKETS = [
-  { min: 0, max: 5000, rate: 0 },
-  { min: 5001, max: 20000, rate: 1 },
-  { min: 20001, max: 35000, rate: 3 },
-  { min: 35001, max: 50000, rate: 8 },
-  { min: 50001, max: 70000, rate: 13 },
-  { min: 70001, max: 100000, rate: 21 },
-  { min: 100001, max: 250000, rate: 24 },
-  { min: 250001, max: 400000, rate: 24.5 },
-  { min: 400001, max: 600000, rate: 25 },
-  { min: 600001, max: 1000000, rate: 26 },
-  { min: 1000001, max: Infinity, rate: 30 },
-];
-
-function calcMalaysiaTax(chargeable) {
-  let tax = 0;
-  for (const bracket of MY_TAX_BRACKETS) {
-    if (chargeable <= bracket.min) break;
-    const taxable = Math.min(chargeable, bracket.max) - bracket.min;
-    tax += taxable * (bracket.rate / 100);
-  }
-  return tax;
-}
 
 export default function TaxationPage() {
   const [yearData, setYearData] = useState(null);
@@ -93,7 +71,7 @@ export default function TaxationPage() {
       const netBusiness = grossIncome - totalExpenses;
       const totalRelief = Object.values(reliefs).reduce((s, v) => s + Number(v), 0);
       const chargeable = Math.max(0, netBusiness - totalRelief);
-      const tax = calcMalaysiaTax(chargeable);
+      const { tax, effectiveRate } = calculateTax(chargeable, Number(year));
       setCalculated({
         gross_income: grossIncome,
         total_expenses: totalExpenses,
@@ -101,7 +79,7 @@ export default function TaxationPage() {
         total_reliefs: totalRelief,
         chargeable_income: chargeable,
         estimated_tax: tax,
-        effective_rate: chargeable > 0 ? ((tax / chargeable) * 100).toFixed(2) : 0,
+        effective_rate: (effectiveRate * 100).toFixed(2),
       });
     } finally {
       setCalculating(false);
@@ -191,7 +169,7 @@ export default function TaxationPage() {
               </tr>
             </thead>
             <tbody>
-              {MY_TAX_BRACKETS.map((b, i) => (
+              {TAX_BRACKETS_AY2024.map((b, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #e0e0e0' }}>
                   <td style={{ padding: '0.5rem' }}>
                     {b.max === Infinity
@@ -199,7 +177,7 @@ export default function TaxationPage() {
                       : `RM ${b.min.toLocaleString()} – RM ${b.max.toLocaleString()}`}
                   </td>
                   <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: b.rate > 0 ? 600 : 400 }}>
-                    {b.rate}%
+                    {(b.rate * 100).toFixed(0)}%
                   </td>
                 </tr>
               ))}

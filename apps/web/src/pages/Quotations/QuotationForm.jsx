@@ -12,23 +12,11 @@ import {
   InlineLoading,
   ComboBox,
 } from '@carbon/react';
+import { format } from 'date-fns';
 import { Add, TrashCan, UserFollow } from '@carbon/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
 import CustomerQuickCreateModal from '../../components/CustomerQuickCreateModal.jsx';
-
-const parseDate = (iso) => {
-  if (!iso) return undefined;
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
-
-const fmtDate = (d) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 const DEFAULT_LINE = { description: '', quantity: 1, unit_price: 0, tax_rate: 0, amount: 0 };
 
@@ -185,12 +173,12 @@ export default function QuotationFormPage() {
           </Select>
         </div>
         <div className="grid-2">
-          <DatePicker datePickerType="single" value={parseDate(form.issue_date)}
-            onChange={([d]) => { if (d) updateForm('issue_date', fmtDate(d)); }}>
+          <DatePicker datePickerType="single" value={form.issue_date ? new Date(form.issue_date) : undefined}
+            onChange={([d]) => { if (d) updateForm('issue_date', format(d, 'yyyy-MM-dd')); }}>
             <DatePickerInput id="issue_date" labelText="Issue Date" placeholder="YYYY-MM-DD" />
           </DatePicker>
-          <DatePicker datePickerType="single" value={parseDate(form.valid_until)}
-            onChange={([d]) => { if (d) updateForm('valid_until', fmtDate(d)); }}>
+          <DatePicker datePickerType="single" value={form.valid_until ? new Date(form.valid_until) : undefined}
+            onChange={([d]) => { if (d) updateForm('valid_until', format(d, 'yyyy-MM-dd')); }}>
             <DatePickerInput id="valid_until" labelText="Valid Until" placeholder="YYYY-MM-DD" />
           </DatePicker>
         </div>
