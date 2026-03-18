@@ -367,7 +367,39 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 
 ---
 
+## Specification Corrections (discovered during v1.3 dev)
+
+### Taxation page — shared tax constants
+- `calculateTax(chargeable, year)` returns `{ tax, effectiveRate }` (not a plain number)
+- `effectiveRate` is a decimal (e.g. `0.15`); multiply by 100 for display
+- `TAX_BRACKETS_AY2024` stores rates as decimals (e.g. `0.21` not `21`)
+- The frontend no longer maintains its own bracket data — `@personal-accountant/shared` is the single source of truth
+
+---
+
 ## Release Log
+
+### v1.3 — Code Quality, Shared Tax Constants & Minor Fixes (2026-03-18)
+
+#### Changes
+| File | What changed |
+|---|---|
+| `expensesController.js` | OCR handler: sync fs calls → async `fs.promises` |
+| `invoicesController.js` | `EinvoiceSubmission` static import; `getNextNumber` delegates to helper |
+| `Taxation/index.jsx` | Inline tax brackets removed; imports from `@personal-accountant/shared` |
+| `QuotationForm.jsx` | Custom date helpers replaced with `date-fns` |
+| `BankReconciliation/index.jsx` | ID comparison fix; ignore button passes correct `row.id` |
+| `Documents/index.jsx` | Row lookup by ID instead of positional index |
+| `Settings/index.jsx` | Removed unused import; password-change UI cleaned up |
+
+#### Bug fixes
+| Area | Fix |
+|---|---|
+| Bank Reconciliation | Ignore toggle ID mismatch |
+| Documents | Wrong document opened when filters active |
+| OCR | Sync fs calls blocked event loop |
+
+---
 
 ### v1.2 — UI Polish, Modal Forms & Bug Fixes (2026-02-27)
 
