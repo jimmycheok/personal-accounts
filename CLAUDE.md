@@ -136,6 +136,6 @@ Copy `.env.example` to `.env`. Critical vars:
 
 ## Malaysian tax specifics
 - **Borang B sections** D1–D20 map to expense categories. D15 (Entertainment) is 50% deductible — enforced in `TaxCalculator.getExpensesBySection()`, not at data entry.
-- **Mileage rate**: RM 0.25/km, added to D5 (Motor Vehicle) in the tax calculation.
+- **Mileage rate**: RM 0.60/km (first 200 km/month), RM 0.40/km thereafter, added to D5 (Motor Vehicle) in the tax calculation.
 - **LHDN MyInvois**: Sandbox URL is `https://preprod-api.myinvois.hasil.gov.my`; toggle via `einvoice_configs.is_sandbox`. B2C transactions < RM200 use consolidated monthly submission (document type `01`, special buyer TIN `EI00000000010`).
 - **Assessment years**: Tax bracket data in `packages/shared/src/constants/taxBrackets.js` currently covers AY2024 and AY2025 (same brackets until LHDN updates).

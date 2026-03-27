@@ -41,6 +41,7 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [duplicatePrefill, setDuplicatePrefill] = useState(null);
   const [viewExpense, setViewExpense] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
@@ -132,6 +133,17 @@ export default function ExpensesPage() {
                               : cell.info.header === 'actions'
                               ? <OverflowMenu flipped size="sm">
                                   <OverflowMenuItem itemText="View" onClick={() => setViewExpense(expense)} />
+                                  <OverflowMenuItem itemText="Duplicate" onClick={() => {
+                                    setDuplicatePrefill({
+                                      vendor: expense.vendor_name,
+                                      description: expense.description,
+                                      amount: expense.amount,
+                                      date: expense.expense_date,
+                                      category_id: expense.category_id,
+                                      notes: expense.notes,
+                                    });
+                                    setModalOpen(true);
+                                  }} />
                                   <OverflowMenuItem itemText="Delete" isDelete onClick={() => handleDelete(row.id)} />
                                 </OverflowMenu>
                               : cell.value}
@@ -158,7 +170,8 @@ export default function ExpensesPage() {
 
       <AddExpenseModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setDuplicatePrefill(null); }}
+        prefill={duplicatePrefill}
         onSuccess={fetchExpenses}
       />
 

@@ -10,6 +10,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Create quotations and convert accepted ones directly into invoices
 - Generate professional PDF invoices with embedded DuitNow QR codes for instant payment
 - Record partial or full payments; invoices auto-mark as paid when settled
+- Duplicate any invoice, expense, or mileage entry — opens a pre-filled create form for quick review before saving
 - Issue credit notes linked to original invoices
 - Auto-generate sequential invoice/quotation numbers with configurable prefixes
 
@@ -28,7 +29,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 
 ### Borang B Tax Preparation
 - Aggregates all paid invoices (Part B income) and deductible expenses by Borang B section (Part D)
-- Mileage logs contribute to D5 at the LHDN-approved RM 0.25/km rate
+- Mileage logs contribute to D5 at the LHDN-approved tiered rate (RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter)
 - Personal relief inputs (EPF, medical, education, dependants, etc.) applied to arrive at chargeable income
 - Progressive tax brackets for AY2024/2025 with a full bracket breakdown
 - Exports a formatted Borang B summary PDF ready to hand to your tax agent
@@ -51,7 +52,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 
 ### Supporting Tools
 - **Bank reconciliation** — import CSV bank statements and match rows to invoices or expenses
-- **Mileage log** — track business trips with automatic deduction calculation
+- **Mileage log** — track business trips with LHDN tiered deduction calculation (RM 0.60/km first 200 km, RM 0.40/km thereafter)
 - **Document storage** — attach files to any record; store locally, on AWS S3, or Google Drive
 - **Recurring templates** — auto-generate repeating invoices or expenses on a schedule
 - **Audit log** — all financial mutations are recorded with before/after snapshots
@@ -216,6 +217,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage, fix mileage deduction rate to match LHDN tiered schedule |
 | [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |
 | [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |
 | [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
@@ -228,7 +230,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 - **LHDN MyInvois**: Sandbox environment available for testing at `https://preprod-api.myinvois.hasil.gov.my`. Production credentials are configured through the app UI (Settings → E-Invoice), not the `.env` file.
 - **Borang B**: Tax calculations use AY2024/2025 progressive brackets (0%–30%). Tax bracket data lives in `packages/shared/src/constants/taxBrackets.js` and must be updated when LHDN announces changes.
-- **Mileage**: RM 0.25/km is the current LHDN-approved deductible rate for business travel.
+- **Mileage**: LHDN-approved tiered rate — RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter.
 - **GST/SST**: The system supports per-line tax rates on invoices. No hard-coded tax rate — the business owner sets the applicable rate per line item.
 - **Currency**: All financial records store the original currency and exchange rate alongside an `amount_myr` field for reporting. Reporting and Borang B calculations use the MYR value.
 

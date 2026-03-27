@@ -58,7 +58,7 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
     api.get('/expense-categories').then(res => setCategories(res.data || [])).catch(console.error);
   }, []);
 
-  // Apply OCR prefill
+  // Apply prefill (OCR or duplicate)
   useEffect(() => {
     if (prefill) {
       setForm(p => ({
@@ -67,6 +67,8 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
         description: prefill.description || p.description,
         amount: prefill.amount ? String(prefill.amount) : p.amount,
         expense_date: prefill.date || p.expense_date,
+        category_id: prefill.category_id != null ? String(prefill.category_id) : p.category_id,
+        notes: prefill.notes || p.notes,
       }));
     }
   }, [prefill]);
