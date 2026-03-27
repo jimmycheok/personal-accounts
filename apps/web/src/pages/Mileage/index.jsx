@@ -43,7 +43,7 @@ const HEADERS = [
 ];
 
 const PURPOSES = ['client_visit', 'business_meeting', 'site_inspection', 'purchase', 'bank', 'government_office', 'other'];
-const MY_MILEAGE_RATE = 0.30; // RM 0.30 per km (Malaysia LHDN rate)
+const MY_MILEAGE_RATE = 0.60; // RM 0.60 per km (LHDN approved rate for first 200km/month)
 
 const EMPTY_FORM = () => ({
   log_date: new Date().toISOString().slice(0, 10),
@@ -206,6 +206,19 @@ export default function MileagePage() {
                             {cell.info.header === 'actions'
                               ? <OverflowMenu flipped size="sm">
                                   <OverflowMenuItem itemText="View" onClick={() => setViewEntry(entry)} />
+                                  <OverflowMenuItem itemText="Duplicate" onClick={() => {
+                                    setForm({
+                                      log_date: new Date().toISOString().slice(0, 10),
+                                      from_location: entry.from_location || '',
+                                      to_location: entry.to_location || '',
+                                      km: String(entry.km || ''),
+                                      purpose: entry.purpose || 'client_visit',
+                                      notes: entry.notes || '',
+                                      round_trip: false,
+                                    });
+                                    setFormError('');
+                                    setLogOpen(true);
+                                  }} />
                                   <OverflowMenuItem itemText="Delete" isDelete onClick={() => handleDelete(row.id)} />
                                 </OverflowMenu>
                               : cell.value}
@@ -231,7 +244,7 @@ export default function MileagePage() {
       )}
 
       <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: '#8d8d8d' }}>
-        * Mileage deduction calculated at RM {MY_MILEAGE_RATE.toFixed(2)}/km as per LHDN guidelines.
+        * Mileage deduction: RM 0.60/km for the first 200km/month, RM 0.40/km thereafter, as per LHDN guidelines.
       </p>
 
       {/* Log Trip Modal */}

@@ -399,6 +399,17 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 - Chart of Accounts passed inline in prompt as pipe-delimited list for token efficiency (no tool call to fetch accounts)
 - Single API call with `tool_choice: { type: 'tool', name: 'suggest_journal_entry' }` — forced tool use, no conversation loop
 
+## Specification Corrections (discovered during v2.1 dev)
+
+### Mileage deduction rate
+- Documented rate of RM 0.25/km was incorrect in CLAUDE.md and README.md
+- Backend `routes/mileage.js` uses `DEFAULT_RATE_PER_KM = 0.60` (configurable via `MILEAGE_RATE_PER_KM` env var)
+- Frontend `Mileage/index.jsx` previously used `0.30` — corrected to `0.60` to match backend
+- LHDN actual rate is tiered: RM 0.60/km (first 200 km/month), RM 0.40/km thereafter — flat-rate-per-entry is a known simplification
+
+### AddExpenseModal prefill prop
+- `prefill` prop now also accepts `category_id` (number) and `notes` (string), in addition to the original OCR-only fields (`vendor`, `description`, `amount`, `date`)
+
 ---
 
 ## Release Log

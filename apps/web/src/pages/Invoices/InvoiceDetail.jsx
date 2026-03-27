@@ -21,6 +21,7 @@ import {
   Download,
   Upload,
   ArrowLeft,
+  Copy,
 } from '@carbon/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
@@ -156,6 +157,26 @@ export default function InvoiceDetailPage() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <Button kind="ghost" renderIcon={Download} onClick={handleDownloadPDF} size="sm">PDF</Button>
+          <Button kind="ghost" renderIcon={Copy} size="sm" onClick={() => {
+            navigate('/invoices/new', {
+              state: {
+                duplicate: {
+                  customer_id: invoice.customer_id,
+                  payment_terms: invoice.payment_terms || 30,
+                  notes: invoice.notes || '',
+                  currency: invoice.currency || 'MYR',
+                  po_number: '',
+                  items: invoice.items?.map(item => ({
+                    description: item.description,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    tax_rate: item.tax_rate || 0,
+                    amount: item.amount,
+                  })) || [],
+                },
+              },
+            });
+          }}>Duplicate</Button>
           {invoice.status === 'draft' && (
             <Button renderIcon={Send} onClick={handleSend} size="sm" disabled={actionLoading === 'send'}>
               {actionLoading === 'send' ? 'Sending...' : 'Send'}

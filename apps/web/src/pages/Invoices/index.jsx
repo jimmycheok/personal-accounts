@@ -94,6 +94,33 @@ export default function InvoicesListPage() {
     }
   };
 
+  const handleDuplicate = async (id) => {
+    try {
+      const res = await api.get(`/invoices/${id}`);
+      const inv = res.data;
+      navigate('/invoices/new', {
+        state: {
+          duplicate: {
+            customer_id: inv.customer_id,
+            payment_terms: inv.payment_terms || 30,
+            notes: inv.notes || '',
+            currency: inv.currency || 'MYR',
+            po_number: '',
+            items: inv.items?.map(item => ({
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              tax_rate: item.tax_rate || 0,
+              amount: item.amount,
+            })) || [],
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Failed to load invoice for duplication');
+    }
+  };
+
   const handleMarkPaid = (id) => {
     const invoice = invoices.find(inv => String(inv.id) === String(id));
     setPaymentModal({ open: true, invoiceId: id, invoiceNumber: invoice?.invoice_number || '', amountDue: invoice?.amount_due ?? 0 });
@@ -163,6 +190,7 @@ export default function InvoicesListPage() {
                                   {invoice?.status !== 'paid' && (
                                     <OverflowMenuItem itemText="Mark Paid" onClick={() => handleMarkPaid(row.id)} />
                                   )}
+                                  <OverflowMenuItem itemText="Duplicate" onClick={() => handleDuplicate(row.id)} />
                                   <OverflowMenuItem itemText="Void" hasDivider isDelete onClick={() => handleVoid(row.id)} />
                                 </OverflowMenu>
                               ) : cell.value}

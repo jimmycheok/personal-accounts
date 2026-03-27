@@ -23,7 +23,7 @@ import {
 } from '@carbon/react';
 import { format, addDays } from 'date-fns';
 import { Add, TrashCan, UserFollow } from '@carbon/icons-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../../services/api.js';
 import CustomerQuickCreateModal from '../../components/CustomerQuickCreateModal.jsx';
 import GLReviewModal from '../../components/GLReviewModal.jsx';
@@ -39,7 +39,9 @@ function calcLine(line) {
 export default function InvoiceFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEdit = Boolean(id);
+  const duplicateData = location.state?.duplicate;
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(isEdit);
@@ -88,6 +90,19 @@ export default function InvoiceFormPage() {
           amount: item.amount,
         })) : [{ ...DEFAULT_LINE }]);
       }).catch(console.error).finally(() => setLoading(false));
+    } else if (duplicateData) {
+      setForm(p => ({
+        ...p,
+        customer_id: duplicateData.customer_id || '',
+        payment_terms: duplicateData.payment_terms || 30,
+        due_date: computeDueDate(p.issue_date, duplicateData.payment_terms || 30),
+        notes: duplicateData.notes || '',
+        currency: duplicateData.currency || 'MYR',
+        po_number: duplicateData.po_number || '',
+      }));
+      if (duplicateData.items?.length) {
+        setLines(duplicateData.items.map(item => calcLine({ ...item })));
+      }
     }
   }, [id]);
 
