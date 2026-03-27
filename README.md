@@ -33,6 +33,16 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Progressive tax brackets for AY2024/2025 with a full bracket breakdown
 - Exports a formatted Borang B summary PDF ready to hand to your tax agent
 
+### Double-Entry Accounting (v2.0)
+- Pre-seeded Chart of Accounts (35 accounts) mapped to Malaysian Borang B sections D1-D20
+- General Ledger with automatic journal entry creation for every financial transaction
+- GL Review Modal appears before each transaction — pre-fills smart defaults, allows manual account selection, or AI-powered suggestions via Claude
+- Profit & Loss report with Revenue, COGS, Gross Profit, Operating Expenses (by Borang B section), and Net Profit — with PDF export
+- Balance Sheet report with Assets, Liabilities, Owner's Equity, and automatic balance verification — with PDF export
+- Trial Balance report
+- Year-end closing automation: closes revenue/expense accounts to Retained Earnings, transfers Owner's Drawings to Capital
+- Manual journal entries for adjustments not covered by standard transactions
+
 ### Dashboard & Reporting
 - Financial overview: revenue, expenses, net profit, and outstanding balance — filterable by month, quarter, or year
 - Upcoming deadlines: overdue invoices, due-soon invoices, and annual Borang B filing reminder (30 April)
@@ -76,17 +86,17 @@ personal-accountant/
 │   │   ├── controllers/      # Request handlers
 │   │   ├── jobs/             # Agenda scheduled jobs
 │   │   ├── middlewares/      # JWT auth, error handler, audit log
-│   │   ├── migrations/       # Sequelize migrations (21 tables)
-│   │   ├── models/           # Sequelize models
-│   │   ├── routes/           # Route definitions (18 route files)
+│   │   ├── migrations/       # Sequelize migrations (24 tables)
+│   │   ├── models/           # Sequelize models (25 including Account, JournalEntry, JournalEntryLine)
+│   │   ├── routes/           # Route definitions (21 route files)
 │   │   ├── schemas/          # Zod validation schemas
 │   │   ├── seeders/          # Expense category seed data
-│   │   ├── services/         # Business logic (MyInvois, OCR, PDF, tax, etc.)
-│   │   └── templates/        # HTML templates for Gotenberg PDF
+│   │   ├── services/         # Business logic (MyInvois, OCR, PDF, tax, GL, reports, AI accounting)
+│   │   └── templates/        # HTML templates for Gotenberg PDF (invoice, P&L, balance sheet)
 │   │
 │   └── web/                  # React frontend (port 5173)
 │       └── src/
-│           ├── components/   # AppShell, AddExpenseModal, AttachmentsPanel, OCRAssistantModal, PaymentModal, CustomerQuickCreateModal
+│           ├── components/   # AppShell, GLReviewModal, AddExpenseModal, PaymentModal, ConfirmModal, AttachmentsPanel, OCRAssistantModal, CustomerQuickCreateModal
 │           ├── context/      # AuthContext, AppSettingsContext
 │           ├── pages/        # One folder per route
 │           └── services/     # Axios API client with JWT interceptor
@@ -127,6 +137,14 @@ personal-accountant/
 | `/bank-reconciliation` | CSV import and transaction matching |
 | `/customers` | Customer CRUD with search and inline quick-create from invoice/quotation forms |
 | `/mileage` | Trip log with modal entry form and per-trip detail view |
+| `/chart-of-accounts` | Chart of Accounts with type filter, add account, click-through to account ledger |
+| `/chart-of-accounts/:id/ledger` | Per-account transaction ledger with running balance |
+| `/general-ledger` | Journal entries list with date range and source type filters |
+| `/general-ledger/new` | Manual journal entry form with balanced debit/credit validation |
+| `/general-ledger/:id` | Journal entry detail with line items |
+| `/reports` | Financial reports landing page |
+| `/reports/profit-loss` | P&L statement with Borang B grouping, PDF download, year-end close |
+| `/reports/balance-sheet` | Balance Sheet with Assets = Liabilities + Equity verification |
 | `/documents` | File attachments across all records |
 | `/settings` | Business profile, e-invoice config, storage, preferences |
 
@@ -198,6 +216,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |
 | [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |
 | [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
 | v1.1 | 2026-02-20 | Docker build, env loading, bank reconciliation refactor, UI fixes |
@@ -215,10 +234,11 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 ---
 
-## v1.1 roadmap
+## Roadmap
 
 - [ ] Recurring expense management UI (backend already scaffolded)
 - [ ] Audit trail viewer page (`audit_logs` table is populated, no UI yet)
 - [ ] Live MYR exchange rates via a public API (currently manual input)
 - [ ] Invoice delivery by email with PDF attachment
 - [ ] Read-only customer portal for invoice viewing
+- [ ] Multi-currency General Ledger support
