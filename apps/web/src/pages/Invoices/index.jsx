@@ -24,6 +24,7 @@ import { Add } from '@carbon/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api.js';
 import PaymentModal from '../../components/PaymentModal.jsx';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray',
@@ -54,6 +55,7 @@ export default function InvoicesListPage() {
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [paymentModal, setPaymentModal] = useState({ open: false, invoiceId: null, amountDue: 0 });
+  const [confirmModal, setConfirmModal] = useState({ open: false, id: null });
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -78,18 +80,23 @@ export default function InvoicesListPage() {
   };
 
   const handleVoid = async (id) => {
-    if (!window.confirm('Void this invoice?')) return;
+    setConfirmModal({ open: true, id });
+  };
+
+  const confirmVoid = async () => {
+    const id = confirmModal.id;
+    setConfirmModal({ open: false, id: null });
     try {
       await api.patch(`/invoices/${id}/void`);
       fetchInvoices();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to void invoice');
+      console.error(err.response?.data?.error || 'Failed to void invoice');
     }
   };
 
   const handleMarkPaid = (id) => {
     const invoice = invoices.find(inv => String(inv.id) === String(id));
-    setPaymentModal({ open: true, invoiceId: id, amountDue: invoice?.amount_due ?? 0 });
+    setPaymentModal({ open: true, invoiceId: id, invoiceNumber: invoice?.invoice_number || '', amountDue: invoice?.amount_due ?? 0 });
   };
 
   const rows = invoices
@@ -188,10 +195,20 @@ export default function InvoicesListPage() {
         </>
       )}
 
+      <ConfirmModal
+        open={confirmModal.open}
+        title="Void Invoice"
+        message="Are you sure you want to void this invoice?"
+        confirmText="Void"
+        onConfirm={confirmVoid}
+        onCancel={() => setConfirmModal({ open: false, id: null })}
+      />
+
       <PaymentModal
         open={paymentModal.open}
-        onClose={() => setPaymentModal({ open: false, invoiceId: null, amountDue: 0 })}
+        onClose={() => setPaymentModal({ open: false, invoiceId: null, invoiceNumber: '', amountDue: 0 })}
         invoiceId={paymentModal.invoiceId}
+        invoiceNumber={paymentModal.invoiceNumber}
         amountDue={paymentModal.amountDue}
         onSuccess={fetchInvoices}
       />

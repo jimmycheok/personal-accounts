@@ -8,6 +8,7 @@ BusinessProfile.init({
   business_name: { type: DataTypes.STRING(200), allowNull: false },
   ssm_number: { type: DataTypes.STRING(50) },
   tin: { type: DataTypes.STRING(20) },
+  sst_number: { type: DataTypes.STRING(50) },
   msic_code: { type: DataTypes.STRING(10) },
   msic_description: { type: DataTypes.STRING(200) },
   address_line1: { type: DataTypes.STRING(200) },

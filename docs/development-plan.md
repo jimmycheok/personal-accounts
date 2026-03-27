@@ -377,6 +377,30 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 
 ---
 
+## Specification Corrections (discovered during v2.0 dev)
+
+### CreditNote model
+- Field for total amount is `amount`, not `total` — CreditNote has `amount` + `tax_amount`, no `total` field
+- No direct `customer_id` on CreditNote — customer accessed via `creditNote.invoice.customer`
+
+### Payment model
+- Column for payment method is `method`, not `payment_method` (DB column: `method`)
+- The payments route destructures `payment_method` from `req.body` but passes it as `payment_method` to `Payment.create()` — Sequelize silently ignores it, defaulting to `bank_transfer`
+
+### New accounting models (v2.0)
+- `accounts` table: `account_type` ENUM('asset','liability','equity','revenue','expense'), `sub_type` VARCHAR for finer classification
+- `journal_entries` table: polymorphic `source_type`+`source_id` links to invoices/expenses/payments/credit_notes/mileage
+- `journal_entry_lines` table: `debit`/`credit` DECIMAL(15,2), FK to accounts (RESTRICT delete) and journal_entries (CASCADE delete)
+- All transaction controllers accept optional `journal_lines[]` in request body — when present, GL entries are created alongside the transaction
+
+### AI GL suggestion
+- Uses Anthropic Claude Sonnet (not OpenAI) via `@anthropic-ai/sdk`
+- Env var: `CLAUDE_API_KEY` (not `OPENAI_API_KEY`)
+- Chart of Accounts passed inline in prompt as pipe-delimited list for token efficiency (no tool call to fetch accounts)
+- Single API call with `tool_choice: { type: 'tool', name: 'suggest_journal_entry' }` — forced tool use, no conversation loop
+
+---
+
 ## Release Log
 
 ### v1.3 — Code Quality, Shared Tax Constants & Minor Fixes (2026-03-18)

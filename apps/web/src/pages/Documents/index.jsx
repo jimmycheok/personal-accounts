@@ -25,7 +25,9 @@ import {
   TextInput,
 } from '@carbon/react';
 import { Upload, Download, TrashCan, Folder } from '@carbon/icons-react';
+import { format } from 'date-fns';
 import api from '../../services/api.js';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const DOC_HEADERS = [
   { key: 'name', header: 'File Name' },
@@ -129,6 +131,7 @@ export default function DocumentsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -165,8 +168,13 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this document? This cannot be undone.')) return;
+  const handleDelete = (id) => {
+    setConfirmDelete({ open: true, id });
+  };
+
+  const confirmDeleteDoc = async () => {
+    const id = confirmDelete.id;
+    setConfirmDelete({ open: false, id: null });
     try {
       await api.delete(`/documents/${id}`);
       showNotif('success', 'Document deleted');
@@ -177,20 +185,19 @@ export default function DocumentsPage() {
   };
 
   const filtered = documents.filter(doc =>
-    !search || doc.name?.toLowerCase().includes(search.toLowerCase())
-    || doc.description?.toLowerCase().includes(search.toLowerCase())
+    !search || (doc.original_name || doc.file_name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const rows = filtered.map(doc => ({
     id: String(doc.id),
-    name: doc.original_name || doc.name,
-    category: doc.category || 'other',
-    size: formatBytes(doc.size),
-    uploaded_at: doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-MY') : '-',
+    name: doc.original_name || doc.file_name,
+    category: doc.subject_type || 'other',
+    size: formatBytes(doc.file_size),
+    uploaded_at: doc.createdAt ? format(new Date(doc.createdAt), 'dd/MM/yyyy HH:mm') : '-',
     _doc: doc,
   }));
 
-  const totalSize = documents.reduce((s, d) => s + (d.size || 0), 0);
+  const totalSize = documents.reduce((s, d) => s + (Number(d.file_size) || 0), 0);
 
   return (
     <div className="page-container">
@@ -215,7 +222,7 @@ export default function DocumentsPage() {
         <Tile style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {CATEGORIES.filter(c => c.value !== 'all').map(cat => {
-              const count = documents.filter(d => d.category === cat.value).length;
+              const count = documents.filter(d => d.subject_type === cat.value).length;
               return count > 0 ? (
                 <Tag key={cat.value} type={CAT_COLOR[cat.value]}>{cat.label}: {count}</Tag>
               ) : null;
@@ -252,7 +259,7 @@ export default function DocumentsPage() {
                         {row.cells.map(cell => (
                           <TableCell key={cell.id}>
                             {cell.info.header === 'category'
-                              ? <Tag type={CAT_COLOR[cell.value] || 'gray'}>{cell.value}</Tag>
+                              ? <Tag type={CAT_COLOR[cell.value] || 'gray'}>{cell.value?.charAt(0).toUpperCase() + cell.value?.slice(1)}</Tag>
                               : cell.info.header === 'actions'
                               ? <OverflowMenu flipped size="sm">
                                   <OverflowMenuItem itemText="Download" onClick={() => handleDownload(docData)} />
@@ -285,6 +292,15 @@ export default function DocumentsPage() {
         open={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
         onSuccess={() => { fetchDocuments(); showNotif('success', 'Documents uploaded successfully'); }}
+      />
+
+      <ConfirmModal
+        open={confirmDelete.open}
+        title="Delete Document"
+        message="Delete this document? This cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDeleteDoc}
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
       />
     </div>
   );

@@ -6,6 +6,7 @@ import {
 } from '@carbon/react';
 import { Upload, Download, TrashCan, Attachment } from '@carbon/icons-react';
 import api from '../services/api.js';
+import ConfirmModal from './ConfirmModal.jsx';
 
 const MIME_LABEL = {
   'application/pdf': { label: 'PDF', type: 'red' },
@@ -36,6 +37,7 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, doc: null });
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
@@ -94,8 +96,13 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
     }
   };
 
-  const handleDelete = async (doc) => {
-    if (!window.confirm(`Delete "${doc.original_name || doc.file_name}"?`)) return;
+  const handleDelete = (doc) => {
+    setConfirmDelete({ open: true, doc });
+  };
+
+  const confirmDeleteAttachment = async () => {
+    const doc = confirmDelete.doc;
+    setConfirmDelete({ open: false, doc: null });
     setDeletingId(doc.id);
     try {
       await api.delete(`/documents/${doc.id}`);
@@ -192,6 +199,15 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
           })}
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmDelete.open}
+        title="Delete Attachment"
+        message={`Delete "${confirmDelete.doc?.original_name || confirmDelete.doc?.file_name || 'file'}"?`}
+        confirmText="Delete"
+        onConfirm={confirmDeleteAttachment}
+        onCancel={() => setConfirmDelete({ open: false, doc: null })}
+      />
     </div>
   );
 }

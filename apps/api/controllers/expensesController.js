@@ -5,6 +5,7 @@ import { Op } from 'sequelize';
 import OcrService from '../services/OcrService.js';
 import StorageService from '../services/StorageService.js';
 import { writeAuditLog } from '../middlewares/auditLog.js';
+import JournalEntryService from '../services/JournalEntryService.js';
 import { UPLOAD_DIR } from '../config/storage.js';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
@@ -45,6 +46,15 @@ export async function create(req, res, next) {
     const amountMyr = parseFloat(data.amount) * (parseFloat(data.exchange_rate) || 1);
 
     const expense = await Expense.create({ ...data, tax_year: year, amount_myr: amountMyr });
+    if (data.journal_lines?.length) {
+      await JournalEntryService.createAutoEntry({
+        entryDate: expense.expense_date,
+        description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
+        lines: data.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'expense',
+        sourceId: expense.id,
+      });
+    }
     await writeAuditLog({ action: 'create', subjectType: 'Expense', subjectId: expense.id });
     res.status(201).json(expense);
   } catch (err) {
@@ -78,6 +88,7 @@ export async function remove(req, res, next) {
   try {
     const expense = await Expense.findByPk(req.params.id);
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
+    await JournalEntryService.deleteAutoEntriesForSource('expense', expense.id);
     await expense.destroy();
     res.status(204).send();
   } catch (err) {

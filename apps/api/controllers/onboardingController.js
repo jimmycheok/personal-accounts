@@ -57,7 +57,7 @@ export async function complete(req, res, next) {
     if (storageConfig) {
       await StorageConfig.upsert({
         id: 1,
-        storage_type: storageConfig.type || 'local',
+        storage_type: storageConfig.type || 'minio',
         config_enc: storageConfig.config || {},
         is_active: true,
       });

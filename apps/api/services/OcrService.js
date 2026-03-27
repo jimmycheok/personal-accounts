@@ -1,24 +1,28 @@
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import fs from 'fs';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 
 class OcrService {
   async extractReceiptData(filePath) {
     const imageBuffer = fs.readFileSync(filePath);
     const base64Image = imageBuffer.toString('base64');
-    const mimeType = filePath.match(/\.(jpg|jpeg)$/i) ? 'image/jpeg'
+    const mediaType = filePath.match(/\.(jpg|jpeg)$/i) ? 'image/jpeg'
       : filePath.match(/\.png$/i) ? 'image/png'
       : filePath.match(/\.gif$/i) ? 'image/gif'
       : 'image/webp';
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      response_format: { type: 'json_object' },
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
       messages: [
         {
           role: 'user',
           content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64Image },
+            },
             {
               type: 'text',
               text: `Analyze this Malaysian receipt/invoice image and extract the following information as JSON.
@@ -35,20 +39,18 @@ class OcrService {
               }
               If you cannot determine a value, use null. For Malaysian receipts, default currency to MYR.`,
             },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64Image}`, detail: 'high' },
-            },
           ],
         },
       ],
-      max_tokens: 1000,
     });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) throw new Error('No OCR response from GPT-4o');
+    const content = response.content[0]?.text;
+    if (!content) throw new Error('No OCR response from Claude');
 
-    const parsed = JSON.parse(content);
+    // Extract JSON from response (Claude may wrap it in markdown code blocks)
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No valid JSON found in OCR response');
+    const parsed = JSON.parse(jsonMatch[0]);
 
     return {
       vendor: parsed.vendor || null,

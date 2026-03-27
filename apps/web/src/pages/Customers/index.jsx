@@ -27,6 +27,7 @@ import {
 } from '@carbon/react';
 import { Add } from '@carbon/icons-react';
 import api from '../../services/api.js';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const CUSTOMER_TYPE_COLOR = { B2B: 'blue', B2C: 'green', B2G: 'purple' };
 
@@ -77,6 +78,7 @@ export default function CustomersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -128,13 +130,18 @@ export default function CustomersPage() {
     setModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this customer? This cannot be undone.')) return;
+  const handleDelete = (id) => {
+    setConfirmDelete({ open: true, id });
+  };
+
+  const confirmDeleteCustomer = async () => {
+    const id = confirmDelete.id;
+    setConfirmDelete({ open: false, id: null });
     try {
       await api.delete(`/customers/${id}`);
       fetchCustomers();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete customer');
+      console.error(err.response?.data?.error || 'Failed to delete customer');
     }
   };
 
@@ -387,6 +394,15 @@ export default function CustomersPage() {
           />
         )}
       </Modal>
+
+      <ConfirmModal
+        open={confirmDelete.open}
+        title="Delete Customer"
+        message="Delete this customer? This cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDeleteCustomer}
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
+      />
     </div>
   );
 }

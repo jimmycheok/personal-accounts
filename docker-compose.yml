@@ -32,6 +32,36 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: pa_minio
+      MINIO_ROOT_PASSWORD: pa_minio_secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 pa_minio pa_minio_secret;
+      mc mb --ignore-existing local/pa-documents;
+      exit 0;
+      "
+
   gotenberg:
     image: gotenberg/gotenberg:8
     ports:
@@ -70,16 +100,13 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       AES_SECRET_KEY: ${AES_SECRET_KEY}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      # Storage
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
-      UPLOAD_DIR: ./uploads
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      # Storage (MinIO / S3)
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: pa_minio
+      MINIO_SECRET_KEY: pa_minio_secret
+      MINIO_BUCKET: pa-documents
+      MINIO_PUBLIC_URL: http://localhost:9000
       # Email
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -94,8 +121,6 @@ services:
       MYINVOIS_PROD_URL: ${MYINVOIS_PROD_URL:-https://api.myinvois.hasil.gov.my}
     ports:
       - "3001:3001"
-    volumes:
-      - api_uploads:/app/uploads
     restart: unless-stopped
 
   web:
@@ -113,4 +138,4 @@ services:
 volumes:
   postgres_data:
   mongodb_data:
-  api_uploads:
+  minio_data:
