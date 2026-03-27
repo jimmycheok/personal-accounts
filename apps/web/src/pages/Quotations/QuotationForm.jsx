@@ -205,8 +205,9 @@ export default function QuotationFormPage() {
               {lines.map((line, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #e0e0e0' }}>
                   <td style={{ padding: '0.5rem' }}>
-                    <TextInput id={`desc-${idx}`} labelText="" hideLabel value={line.description}
-                      onChange={e => updateLine(idx, 'description', e.target.value)} placeholder="Description" />
+                    <TextArea id={`desc-${idx}`} labelText="" hideLabel value={line.description}
+                      onChange={e => updateLine(idx, 'description', e.target.value)} placeholder="Description"
+                      rows={2} style={{ minHeight: 'unset' }} />
                   </td>
                   <td style={{ padding: '0.5rem' }}>
                     <TextInput id={`qty-${idx}`} labelText="" hideLabel type="number" value={line.quantity}

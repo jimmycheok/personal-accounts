@@ -4,6 +4,7 @@ import { writeAuditLog } from '../middlewares/auditLog.js';
 import PdfService from '../services/PdfService.js';
 import DuitNowService from '../services/DuitNowService.js';
 import MyInvoisService from '../services/MyInvoisService.js';
+import JournalEntryService from '../services/JournalEntryService.js';
 
 function recalcTotals(items) {
   let subtotal = 0, taxTotal = 0;
@@ -137,6 +138,15 @@ export async function send(req, res, next) {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'sent', sent_at: new Date() });
+    if (req.body.journal_lines?.length) {
+      await JournalEntryService.createAutoEntry({
+        entryDate: invoice.issue_date,
+        description: `Invoice ${invoice.invoice_number} issued`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'invoice',
+        sourceId: invoice.id,
+      });
+    }
     await writeAuditLog({ action: 'send', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
   } catch (err) {
@@ -149,6 +159,15 @@ export async function markPaid(req, res, next) {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'paid', paid_at: new Date(), amount_paid: invoice.total, amount_due: 0 });
+    if (req.body.journal_lines?.length) {
+      await JournalEntryService.createAutoEntry({
+        entryDate: new Date().toISOString().split('T')[0],
+        description: `Full payment for ${invoice.invoice_number}`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'payment',
+        sourceId: invoice.id,
+      });
+    }
     await writeAuditLog({ action: 'mark_paid', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
   } catch (err) {
@@ -161,6 +180,19 @@ export async function voidInvoice(req, res, next) {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'void', void_reason: req.body.reason });
+    if (req.body.journal_lines?.length) {
+      // Delete previous auto-entries for this invoice and create reversal
+      await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+      await JournalEntryService.createAutoEntry({
+        entryDate: new Date().toISOString().split('T')[0],
+        description: `Void invoice ${invoice.invoice_number}`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'invoice',
+        sourceId: invoice.id,
+      });
+    } else {
+      await JournalEntryService.onInvoiceVoided(invoice);
+    }
     await writeAuditLog({ action: 'void', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
   } catch (err) {

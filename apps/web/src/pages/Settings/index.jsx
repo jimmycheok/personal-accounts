@@ -23,7 +23,8 @@ import api from '../../services/api.js';
 function BusinessProfileTab() {
   const [form, setForm] = useState({
     business_name: '', registration_number: '', tax_identification_number: '',
-    sst_number: '', address: '', phone: '', email: '', website: '',
+    sst_number: '', address_line1: '', address_line2: '', city: '', postcode: '',
+    state: '', country: 'Malaysia', phone: '', email: '', website: '',
     currency: 'MYR', fiscal_year_start: '01', invoice_prefix: 'INV-',
     quotation_prefix: 'QT-', invoice_notes: '',
   });
@@ -76,8 +77,24 @@ function BusinessProfileTab() {
           onChange={e => update('sst_number', e.target.value)} />
       </div>
       <div style={{ marginBottom: '1rem' }}>
-        <TextArea id="s-addr" labelText="Business Address" value={form.address || ''}
-          onChange={e => update('address', e.target.value)} rows={3} />
+        <TextInput id="s-addr1" labelText="Address Line 1" value={form.address_line1 || ''}
+          onChange={e => update('address_line1', e.target.value)} />
+      </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <TextInput id="s-addr2" labelText="Address Line 2" value={form.address_line2 || ''}
+          onChange={e => update('address_line2', e.target.value)} />
+      </div>
+      <div className="grid-2" style={{ marginBottom: '1rem' }}>
+        <TextInput id="s-city" labelText="City" value={form.city || ''}
+          onChange={e => update('city', e.target.value)} />
+        <TextInput id="s-postcode" labelText="Postcode" value={form.postcode || ''}
+          onChange={e => update('postcode', e.target.value)} />
+      </div>
+      <div className="grid-2" style={{ marginBottom: '1rem' }}>
+        <TextInput id="s-state" labelText="State" value={form.state || ''}
+          onChange={e => update('state', e.target.value)} />
+        <TextInput id="s-country" labelText="Country" value={form.country || ''}
+          onChange={e => update('country', e.target.value)} />
       </div>
       <div className="grid-2" style={{ marginBottom: '1rem' }}>
         <TextInput id="s-phone" labelText="Phone" value={form.phone || ''}
@@ -211,87 +228,63 @@ function EInvoiceTab() {
 }
 
 function StorageTab() {
-  const [form, setForm] = useState({
-    storage_provider: 'local', storage_bucket: '', storage_region: '',
-    storage_access_key: '', storage_secret_key: '', storage_prefix: 'pa-docs/',
-  });
+  const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   useEffect(() => {
     api.get('/settings/storage-config')
-      .then(res => setForm(p => ({ ...p, ...res.data })))
+      .then(res => setUsage(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
-    setError('');
-    setSuccess(false);
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
     try {
-      await api.put('/settings/storage-config', form);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      const res = await api.post('/settings/storage-config/test');
+      setTestResult({ success: true, message: res.data.message || 'MinIO connection successful!' });
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save');
+      setTestResult({ success: false, message: err.response?.data?.error || 'Connection failed' });
     } finally {
-      setSaving(false);
+      setTesting(false);
     }
   };
 
   if (loading) return <InlineLoading description="Loading storage settings..." />;
 
+  const usedMB = usage?.usedBytes ? (usage.usedBytes / (1024 * 1024)).toFixed(2) : '0.00';
+
   return (
     <div>
-      {error && <InlineNotification kind="error" title={error} style={{ marginBottom: '1rem' }} />}
-      {success && <InlineNotification kind="success" title="Storage settings saved" style={{ marginBottom: '1rem' }} />}
+      {testResult && (
+        <InlineNotification kind={testResult.success ? 'success' : 'error'} title={testResult.message} style={{ marginBottom: '1rem' }} />
+      )}
 
-      <div style={{ marginBottom: '1rem' }}>
-        <Select id="s-storage" labelText="Storage Provider" value={form.storage_provider}
-          onChange={e => setForm(p => ({ ...p, storage_provider: e.target.value }))}>
-          <SelectItem value="local" text="Local Storage" />
-          <SelectItem value="s3" text="Amazon S3" />
-          <SelectItem value="r2" text="Cloudflare R2" />
-        </Select>
+      <div style={{ padding: '1rem', background: '#f4f4f4', borderRadius: '4px', marginBottom: '1.5rem' }}>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#161616', fontWeight: 600, marginBottom: '0.5rem' }}>
+          MinIO Object Storage
+        </p>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#525252' }}>
+          All documents (receipts, invoices, attachments) are stored in MinIO, an S3-compatible object storage running locally via Docker.
+          You can browse and manage files through the MinIO Console.
+        </p>
+        <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#525252' }}>
+          <strong>MinIO Console:</strong>{' '}
+          <a href="http://localhost:9001" target="_blank" rel="noopener noreferrer" style={{ color: '#0f62fe' }}>
+            http://localhost:9001
+          </a>
+          {' '}(Username: <code>pa_minio</code> / Password: <code>pa_minio_secret</code>)
+        </p>
+        <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#525252' }}>
+          <strong>Bucket:</strong> <code>pa-documents</code> | <strong>Storage Used:</strong> {usedMB} MB
+        </p>
       </div>
 
-      {form.storage_provider === 'local' && (
-        <div style={{ padding: '1rem', background: '#d0e2ff', borderRadius: '4px', marginBottom: '1.5rem' }}>
-          <p style={{ margin: 0, fontSize: '0.875rem', color: '#003188' }}>
-            Files stored in <code>uploads/</code> on the server. Suitable for single-server deployments.
-          </p>
-        </div>
-      )}
-
-      {(form.storage_provider === 's3' || form.storage_provider === 'r2') && (
-        <div>
-          <div className="grid-2" style={{ marginBottom: '1rem' }}>
-            <TextInput id="s-bucket" labelText="Bucket Name" value={form.storage_bucket || ''}
-              onChange={e => setForm(p => ({ ...p, storage_bucket: e.target.value }))} />
-            <TextInput id="s-region" labelText={form.storage_provider === 'r2' ? 'R2 Endpoint URL' : 'Region'}
-              value={form.storage_region || ''}
-              onChange={e => setForm(p => ({ ...p, storage_region: e.target.value }))}
-              placeholder={form.storage_provider === 'r2' ? 'https://xxx.r2.cloudflarestorage.com' : 'ap-southeast-1'} />
-          </div>
-          <div className="grid-2" style={{ marginBottom: '1rem' }}>
-            <TextInput id="s-ak" labelText="Access Key ID" value={form.storage_access_key || ''}
-              onChange={e => setForm(p => ({ ...p, storage_access_key: e.target.value }))} />
-            <PasswordInput id="s-sk" labelText="Secret Access Key" value={form.storage_secret_key || ''}
-              onChange={e => setForm(p => ({ ...p, storage_secret_key: e.target.value }))} />
-          </div>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <TextInput id="s-prefix" labelText="Object Key Prefix" value={form.storage_prefix || ''}
-              onChange={e => setForm(p => ({ ...p, storage_prefix: e.target.value }))}
-              placeholder="pa-docs/" helperText="Files will be stored under this path prefix in your bucket" />
-          </div>
-        </div>
-      )}
-
-      <Button renderIcon={Save} onClick={handleSave} disabled={saving}>
-        {saving ? 'Saving...' : 'Save Storage Settings'}
+      <Button kind="secondary" onClick={handleTest} disabled={testing}>
+        {testing ? 'Testing...' : 'Test Connection'}
       </Button>
     </div>
   );
@@ -388,6 +381,80 @@ function PreferencesTab() {
   );
 }
 
+function BankingTab() {
+  const [form, setForm] = useState({
+    bank_name: '', bank_account_name: '', bank_account_number: '',
+    default_payment_terms: 30,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    api.get('/settings/banking')
+      .then(res => setForm(p => ({ ...p, ...res.data })))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    setSuccess(false);
+    try {
+      await api.put('/settings/banking', form);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const update = (key, val) => setForm(p => ({ ...p, [key]: val }));
+
+  if (loading) return <InlineLoading description="Loading banking details..." />;
+
+  return (
+    <div>
+      {error && <InlineNotification kind="error" title={error} style={{ marginBottom: '1rem' }} />}
+      {success && <InlineNotification kind="success" title="Banking details saved" style={{ marginBottom: '1rem' }} />}
+
+      <p style={{ color: '#525252', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+        Bank details shown on invoices and used for DuitNow QR code generation.
+      </p>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <TextInput id="s-bank-name" labelText="Bank Name" value={form.bank_name || ''}
+          onChange={e => update('bank_name', e.target.value)} placeholder="e.g. Maybank, CIMB, Public Bank" />
+      </div>
+      <div className="grid-2" style={{ marginBottom: '1rem' }}>
+        <TextInput id="s-bank-acc-name" labelText="Account Holder Name" value={form.bank_account_name || ''}
+          onChange={e => update('bank_account_name', e.target.value)} />
+        <TextInput id="s-bank-acc-num" labelText="Account Number" value={form.bank_account_number || ''}
+          onChange={e => update('bank_account_number', e.target.value)} />
+      </div>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <Select id="s-payment-terms" labelText="Default Payment Terms" value={String(form.default_payment_terms || 30)}
+          onChange={e => update('default_payment_terms', Number(e.target.value))}>
+          <SelectItem value="0" text="Due on Receipt" />
+          <SelectItem value="7" text="Net 7 Days" />
+          <SelectItem value="14" text="Net 14 Days" />
+          <SelectItem value="30" text="Net 30 Days" />
+          <SelectItem value="60" text="Net 60 Days" />
+          <SelectItem value="90" text="Net 90 Days" />
+        </Select>
+      </div>
+
+      <Button renderIcon={Save} onClick={handleSave} disabled={saving}>
+        {saving ? 'Saving...' : 'Save Banking Details'}
+      </Button>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="page-container">
@@ -397,12 +464,14 @@ export default function SettingsPage() {
         <Tabs>
           <TabList aria-label="Settings tabs">
             <Tab>Business Profile</Tab>
+            <Tab>Banking</Tab>
             <Tab>E-Invoice</Tab>
             <Tab>Storage</Tab>
             <Tab>Preferences</Tab>
           </TabList>
           <TabPanels>
             <TabPanel><BusinessProfileTab /></TabPanel>
+            <TabPanel><BankingTab /></TabPanel>
             <TabPanel><EInvoiceTab /></TabPanel>
             <TabPanel><StorageTab /></TabPanel>
             <TabPanel><PreferencesTab /></TabPanel>

@@ -21,11 +21,12 @@ import {
   NumberInput,
   ComboBox,
 } from '@carbon/react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { Add, TrashCan, UserFollow } from '@carbon/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
 import CustomerQuickCreateModal from '../../components/CustomerQuickCreateModal.jsx';
+import GLReviewModal from '../../components/GLReviewModal.jsx';
 
 const DEFAULT_LINE = { description: '', quantity: 1, unit_price: 0, tax_rate: 0, amount: 0 };
 
@@ -45,11 +46,19 @@ export default function InvoiceFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [showGLReview, setShowGLReview] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState(null);
 
+  const computeDueDate = (issueDate, terms) => {
+    if (!issueDate) return '';
+    return format(addDays(new Date(issueDate), Number(terms || 0)), 'yyyy-MM-dd');
+  };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     customer_id: '',
-    issue_date: new Date().toISOString().slice(0, 10),
-    due_date: '',
+    issue_date: todayStr,
+    due_date: computeDueDate(todayStr, 30),
     payment_terms: 30,
     notes: '',
     currency: 'MYR',
@@ -105,28 +114,62 @@ export default function InvoiceFormPage() {
   }, 0);
   const total = subtotal + totalTax;
 
+  const buildPayload = (status) => ({
+    ...form,
+    status,
+    items: lines.map(l => ({
+      description: l.description,
+      quantity: Number(l.quantity),
+      unit_price: Number(l.unit_price),
+      tax_rate: Number(l.tax_rate),
+      amount: Number(l.amount),
+    })),
+  });
+
   const handleSave = async (status = 'draft') => {
     if (!form.customer_id) { setError('Please select a customer'); return; }
     if (!form.issue_date) { setError('Issue date is required'); return; }
+
+    // For "sent" status, show GL review modal before saving
+    if (status === 'sent') {
+      setPendingPayload(buildPayload('sent'));
+      setShowGLReview(true);
+      return;
+    }
+
+    // Draft — save directly, no GL entry
     setSaving(true);
     setError('');
     try {
-      const payload = {
-        ...form,
-        status,
-        items: lines.map(l => ({
-          description: l.description,
-          quantity: Number(l.quantity),
-          unit_price: Number(l.unit_price),
-          tax_rate: Number(l.tax_rate),
-          amount: Number(l.amount),
-        })),
-      };
+      const payload = buildPayload(status);
       if (isEdit) {
         await api.put(`/invoices/${id}`, payload);
       } else {
         await api.post('/invoices', payload);
       }
+      navigate('/invoices');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save invoice');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGLAccept = async (journalLines) => {
+    setShowGLReview(false);
+    setSaving(true);
+    setError('');
+    try {
+      // Save as draft first, then send with GL lines
+      const draftPayload = { ...pendingPayload, status: 'draft' };
+      let invoiceId = id;
+      if (isEdit) {
+        await api.put(`/invoices/${id}`, draftPayload);
+      } else {
+        const res = await api.post('/invoices', draftPayload);
+        invoiceId = res.data.id;
+      }
+      await api.post(`/invoices/${invoiceId}/send`, { journal_lines: journalLines });
       navigate('/invoices');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save invoice');
@@ -181,7 +224,10 @@ export default function InvoiceFormPage() {
         </div>
         <div className="grid-2" style={{ marginBottom: '1rem' }}>
           <DatePicker datePickerType="single" value={new Date(form.issue_date)} onChange={([d]) => {
-            if (d) updateForm('issue_date', format(d, 'yyyy-MM-dd'));
+            if (d) {
+              const issueDateStr = format(d, 'yyyy-MM-dd');
+              setForm(p => ({ ...p, issue_date: issueDateStr, due_date: computeDueDate(issueDateStr, p.payment_terms) }));
+            }
           }}>
             <DatePickerInput id="issue_date" labelText="Issue Date *" placeholder="YYYY-MM-DD" />
           </DatePicker>
@@ -193,7 +239,10 @@ export default function InvoiceFormPage() {
         </div>
         <div className="grid-2">
           <Select id="payment_terms" labelText="Payment Terms (days)" value={String(form.payment_terms)}
-            onChange={e => updateForm('payment_terms', Number(e.target.value))}>
+            onChange={e => {
+              const terms = Number(e.target.value);
+              setForm(p => ({ ...p, payment_terms: terms, due_date: computeDueDate(p.issue_date, terms) }));
+            }}>
             <SelectItem value="0" text="Due on Receipt" />
             <SelectItem value="7" text="Net 7" />
             <SelectItem value="14" text="Net 14" />
@@ -230,13 +279,15 @@ export default function InvoiceFormPage() {
               {lines.map((line, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #e0e0e0' }}>
                   <td style={{ padding: '0.5rem' }}>
-                    <TextInput
+                    <TextArea
                       id={`desc-${idx}`}
                       labelText=""
                       hideLabel
                       value={line.description}
                       onChange={e => updateLine(idx, 'description', e.target.value)}
                       placeholder="Item description"
+                      rows={2}
+                      style={{ minHeight: 'unset' }}
                     />
                   </td>
                   <td style={{ padding: '0.5rem' }}>
@@ -329,6 +380,20 @@ export default function InvoiceFormPage() {
           {saving ? 'Saving...' : 'Save & Send'}
         </Button>
       </div>
+
+      <GLReviewModal
+        open={showGLReview}
+        type="invoice_send"
+        data={{
+          invoice_number: isEdit ? `INV-${id}` : 'New Invoice',
+          customer_name: selectedCustomer?.name || '',
+          subtotal,
+          tax_total: totalTax,
+          total,
+        }}
+        onAccept={handleGLAccept}
+        onCancel={() => setShowGLReview(false)}
+      />
 
       <CustomerQuickCreateModal
         open={showNewCustomer}

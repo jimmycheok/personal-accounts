@@ -18,6 +18,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
 import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray', sent: 'blue', accepted: 'green',
@@ -31,6 +32,7 @@ export default function QuotationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [notification, setNotification] = useState(null);
+  const [confirmAction, setConfirmAction] = useState({ open: false, type: null });
 
   const fetchQuotation = async () => {
     try {
@@ -63,25 +65,33 @@ export default function QuotationDetailPage() {
     }
   };
 
-  const handleConvert = async () => {
-    if (!window.confirm('Convert this quotation to an invoice?')) return;
-    setActionLoading('convert');
-    try {
-      const res = await api.post(`/quotations/${id}/convert-to-invoice`);
-      navigate(`/invoices/${res.data.id}`);
-    } catch (err) {
-      showNotif('error', err.response?.data?.error || 'Failed to convert');
-      setActionLoading('');
-    }
+  const handleConvert = () => {
+    setConfirmAction({ open: true, type: 'convert' });
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm('Delete this quotation? This cannot be undone.')) return;
-    try {
-      await api.delete(`/quotations/${id}`);
-      navigate('/quotations');
-    } catch (err) {
-      showNotif('error', err.response?.data?.error || 'Failed to delete');
+  const handleDelete = () => {
+    setConfirmAction({ open: true, type: 'delete' });
+  };
+
+  const handleConfirmAction = async () => {
+    const type = confirmAction.type;
+    setConfirmAction({ open: false, type: null });
+    if (type === 'convert') {
+      setActionLoading('convert');
+      try {
+        const res = await api.post(`/quotations/${id}/convert-to-invoice`);
+        navigate(`/invoices/${res.data.id}`);
+      } catch (err) {
+        showNotif('error', err.response?.data?.error || 'Failed to convert');
+        setActionLoading('');
+      }
+    } else if (type === 'delete') {
+      try {
+        await api.delete(`/quotations/${id}`);
+        navigate('/quotations');
+      } catch (err) {
+        showNotif('error', err.response?.data?.error || 'Failed to delete');
+      }
     }
   };
 
@@ -194,7 +204,7 @@ export default function QuotationDetailPage() {
           <tbody>
             {quotation.items?.map((item, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                <td style={{ padding: '0.75rem 0.5rem' }}>{item.description}</td>
+                <td style={{ padding: '0.75rem 0.5rem', whiteSpace: 'pre-line' }}>{item.description}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>{item.quantity}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>RM {Number(item.unit_price).toFixed(2)}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>{item.tax_rate || 0}%</td>
@@ -231,6 +241,16 @@ export default function QuotationDetailPage() {
       <Tile style={{ padding: '1.5rem' }}>
         <AttachmentsPanel subjectType="quotation" subjectId={id} />
       </Tile>
+
+      <ConfirmModal
+        open={confirmAction.open}
+        title={confirmAction.type === 'convert' ? 'Convert to Invoice' : 'Delete Quotation'}
+        message={confirmAction.type === 'convert' ? 'Convert this quotation to an invoice?' : 'Delete this quotation? This cannot be undone.'}
+        danger={confirmAction.type === 'delete'}
+        confirmText={confirmAction.type === 'convert' ? 'Convert' : 'Delete'}
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmAction({ open: false, type: null })}
+      />
     </div>
   );
 }

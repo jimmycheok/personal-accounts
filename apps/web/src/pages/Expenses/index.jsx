@@ -25,6 +25,7 @@ import { Add } from '@carbon/icons-react';
 import api from '../../services/api.js';
 import AddExpenseModal from '../../components/AddExpenseModal.jsx';
 import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const HEADERS = [
   { key: 'date', header: 'Date' },
@@ -41,6 +42,7 @@ export default function ExpensesPage() {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [viewExpense, setViewExpense] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -56,13 +58,18 @@ export default function ExpensesPage() {
 
   useEffect(() => { fetchExpenses(); }, []);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this expense?')) return;
+  const handleDelete = (id) => {
+    setConfirmDelete({ open: true, id });
+  };
+
+  const confirmDeleteExpense = async () => {
+    const id = confirmDelete.id;
+    setConfirmDelete({ open: false, id: null });
     try {
       await api.delete(`/expenses/${id}`);
       fetchExpenses();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete expense');
+      console.error(err.response?.data?.error || 'Failed to delete expense');
     }
   };
 
@@ -213,6 +220,15 @@ export default function ExpensesPage() {
           <Button kind="secondary" onClick={() => setViewExpense(null)}>Close</Button>
         </ModalFooter>
       </ComposedModal>
+
+      <ConfirmModal
+        open={confirmDelete.open}
+        title="Delete Expense"
+        message="Delete this expense? This cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDeleteExpense}
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
+      />
     </div>
   );
 }

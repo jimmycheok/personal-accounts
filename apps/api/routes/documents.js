@@ -16,12 +16,13 @@ const upload = multer({
 const router = Router();
 router.use(verifyJwt);
 
-// GET /documents?subject_type=invoice&subject_id=1&search=receipt
+// GET /documents?subject_type=invoice&subject_id=1&category=receipt&search=receipt
 router.get('/', async (req, res, next) => {
   try {
-    const { subject_type, subject_id, search, page = 1, limit = 50 } = req.query;
+    const { subject_type, subject_id, category, search, page = 1, limit = 50 } = req.query;
     const where = {};
     if (subject_type) where.subject_type = subject_type;
+    if (category) where.subject_type = category;
     if (subject_id) where.subject_id = parseInt(subject_id);
     if (search) where.original_name = { [Op.iLike]: `%${search}%` };
 
@@ -41,7 +42,8 @@ router.post('/', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const { subject_type = 'general', subject_id } = req.body;
+    const { subject_type, subject_id, category } = req.body;
+    const docCategory = category || subject_type || 'general';
 
     const buffer = fs.readFileSync(req.file.path);
     try { fs.unlinkSync(req.file.path); } catch {}
@@ -50,11 +52,11 @@ router.post('/', upload.single('file'), async (req, res, next) => {
       buffer,
       req.file.originalname,
       req.file.mimetype,
-      subject_type, // used as the storage folder name
+      docCategory, // used as the storage folder name
     );
 
     const doc = await Document.create({
-      subject_type,
+      subject_type: docCategory,
       subject_id: subject_id ? parseInt(subject_id) : 0,
       storage_type: stored.storageType,
       storage_path: stored.storagePath,
@@ -75,7 +77,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
 // GET /documents/storage-usage
 router.get('/storage-usage', async (req, res, next) => {
   try {
-    const usage = await StorageService.getStorageUsage();
+    const usage = await StorageService.getUsage();
     const docCount = await Document.count();
     res.json({ ...usage, documentCount: docCount });
   } catch (err) { next(err); }
@@ -87,18 +89,15 @@ router.get('/:id/download', async (req, res, next) => {
     const doc = await Document.findByPk(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
-    const { stream, contentType, fileName } = await StorageService.download(doc.storage_path, doc.storage_type);
+    const buffer = await StorageService.download(doc.storage_path);
 
     res.set({
-      'Content-Type': contentType || doc.mime_type || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${fileName || doc.original_name || doc.file_name}"`,
+      'Content-Type': doc.mime_type || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${doc.original_name || doc.file_name}"`,
+      'Content-Length': buffer.length,
     });
 
-    if (stream.pipe) {
-      stream.pipe(res);
-    } else {
-      res.send(stream);
-    }
+    res.send(buffer);
   } catch (err) { next(err); }
 });
 

@@ -29,6 +29,8 @@ import {
 import { Add } from '@carbon/icons-react';
 import api from '../../services/api.js';
 import { format } from 'date-fns';
+import GLReviewModal from '../../components/GLReviewModal.jsx';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const HEADERS = [
   { key: 'date', header: 'Date' },
@@ -60,11 +62,14 @@ export default function MileagePage() {
   const [loading, setLoading] = useState(true);
   const [logOpen, setLogOpen] = useState(false);
   const [viewEntry, setViewEntry] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   // Log trip form state
   const [form, setForm] = useState(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [showGLReview, setShowGLReview] = useState(false);
+  const [pendingTrip, setPendingTrip] = useState(null);
 
   const fetchMileage = async () => {
     setLoading(true);
@@ -86,40 +91,58 @@ export default function MileagePage() {
     setLogOpen(true);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.from_location || !form.to_location || !form.km) {
       setFormError('From, To and Distance are required');
       return;
     }
+    const km = Number(form.km) * (form.round_trip ? 2 : 1);
+    const rate = parseFloat(process.env.MILEAGE_RATE_PER_KM) || MY_MILEAGE_RATE;
+    const deductible = km * rate;
+    setPendingTrip({
+      log_date: form.log_date,
+      from_location: form.from_location,
+      to_location: form.to_location,
+      purpose: form.purpose,
+      notes: form.notes,
+      km,
+      deductible_amount: deductible,
+    });
+    setLogOpen(false);
+    setShowGLReview(true);
+  };
+
+  const handleGLAccept = async (journalLines) => {
+    setShowGLReview(false);
     setSaving(true);
     setFormError('');
     try {
-      const km = Number(form.km) * (form.round_trip ? 2 : 1);
       await api.post('/mileage', {
-        log_date: form.log_date,
-        from_location: form.from_location,
-        to_location: form.to_location,
-        purpose: form.purpose,
-        notes: form.notes,
-        km,
+        ...pendingTrip,
+        journal_lines: journalLines,
       });
-      setLogOpen(false);
       fetchMileage();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to log mileage');
     } finally {
       setSaving(false);
+      setPendingTrip(null);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this mileage entry?')) return;
+  const handleDelete = (id) => {
+    setConfirmDelete({ open: true, id });
+  };
+
+  const confirmDeleteMileage = async () => {
+    const id = confirmDelete.id;
+    setConfirmDelete({ open: false, id: null });
     try {
       await api.delete(`/mileage/${id}`);
       if (viewEntry && String(viewEntry.id) === String(id)) setViewEntry(null);
       fetchMileage();
     } catch (err) {
-      alert('Failed to delete');
+      console.error('Failed to delete');
     }
   };
 
@@ -359,6 +382,23 @@ export default function MileagePage() {
           <Button kind="secondary" onClick={() => setViewEntry(null)}>Close</Button>
         </ModalFooter>
       </ComposedModal>
+
+      <GLReviewModal
+        open={showGLReview}
+        type="mileage_create"
+        data={pendingTrip}
+        onAccept={handleGLAccept}
+        onCancel={() => { setShowGLReview(false); setLogOpen(true); }}
+      />
+
+      <ConfirmModal
+        open={confirmDelete.open}
+        title="Delete Mileage Entry"
+        message="Delete this mileage entry? This cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDeleteMileage}
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
+      />
     </div>
   );
 }

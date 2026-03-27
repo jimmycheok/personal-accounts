@@ -16,7 +16,9 @@ import {
   InlineLoading,
 } from '@carbon/react';
 import { Upload, TrashCan } from '@carbon/icons-react';
+import { format } from 'date-fns';
 import api from '../services/api.js';
+import GLReviewModal from './GLReviewModal.jsx';
 
 const EMPTY_FORM = () => ({
   vendor_name: '',
@@ -49,6 +51,7 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
   const [stagedFiles, setStagedFiles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showGLReview, setShowGLReview] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -74,6 +77,7 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
       setForm(EMPTY_FORM());
       setStagedFiles([]);
       setError('');
+      setShowGLReview(false);
     }
   }, [open]);
 
@@ -85,16 +89,24 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
 
   const removeStaged = (idx) => setStagedFiles(prev => prev.filter((_, i) => i !== idx));
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!form.vendor_name) { setError('Vendor / Supplier is required'); return; }
     if (!form.amount || Number(form.amount) <= 0) { setError('A valid amount is required'); return; }
+    // Show GL review modal
+    setShowGLReview(true);
+  };
+
+  const handleGLAccept = async (journalLines) => {
+    setShowGLReview(false);
     setSaving(true);
     setError('');
     try {
+      const selectedCat = categories.find(c => String(c.id) === String(form.category_id));
       const res = await api.post('/expenses', {
         ...form,
         amount: Number(form.amount),
         category_id: form.category_id || null,
+        journal_lines: journalLines,
       });
       const expenseId = res.data.id;
 
@@ -118,119 +130,138 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
 
   const set = (field) => (e) => setForm(p => ({ ...p, [field]: e.target.value }));
 
+  const selectedCat = categories.find(c => String(c.id) === String(form.category_id));
+
   return (
-    <ComposedModal open={open} onClose={onClose} size="md">
-      <ModalHeader title="Add Expense" />
+    <>
+      <ComposedModal open={open && !showGLReview} onClose={onClose} size="md">
+        <ModalHeader title="Add Expense" />
 
-      <ModalBody>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {error && <InlineNotification kind="error" title={error} />}
+        <ModalBody>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {error && <InlineNotification kind="error" title={error} />}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <TextInput
-              id="ae-vendor"
-              labelText="Vendor / Supplier *"
-              value={form.vendor_name}
-              onChange={set('vendor_name')}
-              placeholder="e.g. Watsons, TNB"
-            />
-            <TextInput
-              id="ae-amount"
-              labelText="Amount (RM) *"
-              type="number"
-              step="0.01"
-              value={form.amount}
-              onChange={set('amount')}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <DatePicker
-              datePickerType="single"
-              value={form.expense_date}
-              onChange={([d]) => { if (d) setForm(p => ({ ...p, expense_date: d.toISOString().slice(0, 10) })); }}
-            >
-              <DatePickerInput id="ae-date" labelText="Date" placeholder="YYYY-MM-DD" />
-            </DatePicker>
-            <Select id="ae-category" labelText="Category" value={form.category_id} onChange={set('category_id')}>
-              <SelectItem value="" text="Select category..." />
-              {categories.map(cat => (
-                <SelectItem
-                  key={cat.id}
-                  value={String(cat.id)}
-                  text={cat.borang_b_section ? `${cat.borang_b_section} — ${cat.name}` : cat.name}
-                />
-              ))}
-            </Select>
-          </div>
-
-          <TextInput
-            id="ae-desc"
-            labelText="Description"
-            value={form.description}
-            onChange={set('description')}
-            placeholder="What was this expense for?"
-          />
-
-          <TextArea
-            id="ae-notes"
-            labelText="Notes"
-            value={form.notes}
-            onChange={set('notes')}
-            rows={2}
-          />
-
-          {/* Attachments */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, margin: 0 }}>
-                Attachments {stagedFiles.length > 0 && `(${stagedFiles.length})`}
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                style={{ display: 'none' }}
-                accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls"
-                onChange={handleStageFiles}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <TextInput
+                id="ae-vendor"
+                labelText="Vendor / Supplier *"
+                value={form.vendor_name}
+                onChange={set('vendor_name')}
+                placeholder="e.g. Watsons, TNB"
               />
-              <Button
-                kind="ghost"
-                size="sm"
-                renderIcon={Upload}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Attach File
-              </Button>
+              <TextInput
+                id="ae-amount"
+                labelText="Amount (RM) *"
+                type="number"
+                step="0.01"
+                value={form.amount}
+                onChange={set('amount')}
+              />
             </div>
 
-            {stagedFiles.length === 0 ? (
-              <p style={{ fontSize: '0.8125rem', color: '#6f6f6f', fontStyle: 'italic' }}>No attachments — receipts will be uploaded with the expense.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                {stagedFiles.map((file, idx) => {
-                  const mimeTag = MIME_LABEL[file.type] || { label: 'FILE', type: 'gray' };
-                  return (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', background: '#f4f4f4', borderRadius: '4px' }}>
-                      <Tag type={mimeTag.type} size="sm">{mimeTag.label}</Tag>
-                      <span style={{ flex: 1, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-                      <span style={{ fontSize: '0.75rem', color: '#6f6f6f', flexShrink: 0 }}>{formatBytes(file.size)}</span>
-                      <Button kind="ghost" size="sm" renderIcon={TrashCan} iconDescription="Remove" hasIconOnly onClick={() => removeStaged(idx)} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </ModalBody>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <DatePicker
+                datePickerType="single"
+                value={new Date(form.expense_date)}
+                onChange={([d]) => { if (d) setForm(p => ({ ...p, expense_date: format(d, 'yyyy-MM-dd') })); }}
+              >
+                <DatePickerInput id="ae-date" labelText="Date" placeholder="YYYY-MM-DD" />
+              </DatePicker>
+              <Select id="ae-category" labelText="Category" value={form.category_id} onChange={set('category_id')}>
+                <SelectItem value="" text="Select category..." />
+                {categories.map(cat => (
+                  <SelectItem
+                    key={cat.id}
+                    value={String(cat.id)}
+                    text={cat.borang_b_section ? `${cat.borang_b_section} — ${cat.name}` : cat.name}
+                  />
+                ))}
+              </Select>
+            </div>
 
-      <ModalFooter>
-        <Button kind="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button onClick={handleSubmit} disabled={saving}>
-          {saving ? <InlineLoading description="Saving..." /> : 'Add Expense'}
-        </Button>
-      </ModalFooter>
-    </ComposedModal>
+            <TextInput
+              id="ae-desc"
+              labelText="Description"
+              value={form.description}
+              onChange={set('description')}
+              placeholder="What was this expense for?"
+            />
+
+            <TextArea
+              id="ae-notes"
+              labelText="Notes"
+              value={form.notes}
+              onChange={set('notes')}
+              rows={2}
+            />
+
+            {/* Attachments */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <p style={{ fontSize: '0.875rem', fontWeight: 600, margin: 0 }}>
+                  Attachments {stagedFiles.length > 0 && `(${stagedFiles.length})`}
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls"
+                  onChange={handleStageFiles}
+                />
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  renderIcon={Upload}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Attach File
+                </Button>
+              </div>
+
+              {stagedFiles.length === 0 ? (
+                <p style={{ fontSize: '0.8125rem', color: '#6f6f6f', fontStyle: 'italic' }}>No attachments — receipts will be uploaded with the expense.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  {stagedFiles.map((file, idx) => {
+                    const mimeTag = MIME_LABEL[file.type] || { label: 'FILE', type: 'gray' };
+                    return (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', background: '#f4f4f4', borderRadius: '4px' }}>
+                        <Tag type={mimeTag.type} size="sm">{mimeTag.label}</Tag>
+                        <span style={{ flex: 1, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                        <span style={{ fontSize: '0.75rem', color: '#6f6f6f', flexShrink: 0 }}>{formatBytes(file.size)}</span>
+                        <Button kind="ghost" size="sm" renderIcon={TrashCan} iconDescription="Remove" hasIconOnly onClick={() => removeStaged(idx)} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </ModalBody>
+
+        <ModalFooter>
+          <Button kind="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={saving}>
+            {saving ? <InlineLoading description="Saving..." /> : 'Add Expense'}
+          </Button>
+        </ModalFooter>
+      </ComposedModal>
+
+      <GLReviewModal
+        open={showGLReview}
+        type="expense_create"
+        data={{
+          vendor_name: form.vendor_name,
+          amount: form.amount,
+          amount_myr: form.amount,
+          description: form.description,
+          category_name: selectedCat?.name || '',
+          borang_b_section: selectedCat?.borang_b_section || '',
+        }}
+        onAccept={handleGLAccept}
+        onCancel={() => setShowGLReview(false)}
+      />
+    </>
   );
 }

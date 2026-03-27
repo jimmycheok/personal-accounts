@@ -7,7 +7,7 @@ Document.init({
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   subject_type: { type: DataTypes.STRING(50), allowNull: false },
   subject_id: { type: DataTypes.INTEGER, allowNull: false },
-  storage_type: { type: DataTypes.ENUM('local', 'google_drive', 'aws_s3'), defaultValue: 'local' },
+  storage_type: { type: DataTypes.STRING(20), defaultValue: 'minio' },
   storage_path: { type: DataTypes.STRING(1000), allowNull: false },
   file_name: { type: DataTypes.STRING(300), allowNull: false },
   original_name: { type: DataTypes.STRING(300) },

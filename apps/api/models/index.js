@@ -23,6 +23,9 @@ import BankStatementRow from './BankStatementRow.js';
 import MileageLog from './MileageLog.js';
 import AuditLog from './AuditLog.js';
 import CashFlowProjection from './CashFlowProjection.js';
+import Account from './Account.js';
+import JournalEntry from './JournalEntry.js';
+import JournalEntryLine from './JournalEntryLine.js';
 
 // Associations
 Quotation.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
@@ -58,6 +61,16 @@ ExpenseCategory.hasMany(ExpenseCategory, { foreignKey: 'parent_id', as: 'childre
 BankStatementRow.belongsTo(BankStatement, { foreignKey: 'bank_statement_id', as: 'statement' });
 BankStatement.hasMany(BankStatementRow, { foreignKey: 'bank_statement_id', as: 'rows' });
 
+// Chart of Accounts & General Ledger
+Account.belongsTo(Account, { foreignKey: 'parent_id', as: 'parent' });
+Account.hasMany(Account, { foreignKey: 'parent_id', as: 'children' });
+
+JournalEntry.hasMany(JournalEntryLine, { foreignKey: 'journal_entry_id', as: 'lines' });
+JournalEntryLine.belongsTo(JournalEntry, { foreignKey: 'journal_entry_id', as: 'journalEntry' });
+
+JournalEntryLine.belongsTo(Account, { foreignKey: 'account_id', as: 'account' });
+Account.hasMany(JournalEntryLine, { foreignKey: 'account_id', as: 'journalEntryLines' });
+
 export {
   sequelize,
   Sequelize,
@@ -82,4 +95,7 @@ export {
   MileageLog,
   AuditLog,
   CashFlowProjection,
+  Account,
+  JournalEntry,
+  JournalEntryLine,
 };

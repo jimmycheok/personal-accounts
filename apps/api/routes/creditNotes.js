@@ -4,6 +4,7 @@ import { CreditNote, Customer, Invoice, BusinessProfile } from '../models/index.
 import { Op } from 'sequelize';
 import MyInvoisService from '../services/MyInvoisService.js';
 import PdfService from '../services/PdfService.js';
+import JournalEntryService from '../services/JournalEntryService.js';
 
 const router = Router();
 router.use(verifyJwt);
@@ -128,6 +129,15 @@ router.post('/:id/send', async (req, res, next) => {
     const cn = await CreditNote.findByPk(req.params.id);
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
     await cn.update({ status: 'submitted', sent_at: new Date() });
+    if (req.body.journal_lines?.length) {
+      await JournalEntryService.createAutoEntry({
+        entryDate: cn.issue_date,
+        description: `Credit note ${cn.credit_note_number} issued`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'credit_note',
+        sourceId: cn.id,
+      });
+    }
     res.json(cn);
   } catch (err) { next(err); }
 });
@@ -137,7 +147,20 @@ router.post('/:id/void', async (req, res, next) => {
   try {
     const cn = await CreditNote.findByPk(req.params.id);
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
-    await cn.update({ status: 'cancelled', void_reason: req.body.reason });
+    await cn.update({ status: 'cancelled', void_reason: req.body?.reason || null });
+    if (req.body.journal_lines?.length) {
+      // Delete previous auto-entries and create reversal
+      await JournalEntryService.deleteAutoEntriesForSource('credit_note', cn.id);
+      await JournalEntryService.createAutoEntry({
+        entryDate: new Date().toISOString().split('T')[0],
+        description: `Void credit note ${cn.credit_note_number}`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'credit_note',
+        sourceId: cn.id,
+      });
+    } else {
+      await JournalEntryService.deleteAutoEntriesForSource('credit_note', cn.id);
+    }
     res.json(cn);
   } catch (err) { next(err); }
 });

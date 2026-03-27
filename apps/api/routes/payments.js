@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { verifyJwt } from '../middlewares/verifyJwt.js';
 import { Payment, Invoice } from '../models/index.js';
+import JournalEntryService from '../services/JournalEntryService.js';
 
 // Mounted at /invoices/:invoiceId/payments
 const router = Router({ mergeParams: true });
@@ -51,6 +52,15 @@ router.post('/', async (req, res, next) => {
       paid_at: newStatus === 'paid' ? new Date() : invoice.paid_at,
     });
 
+    if (req.body.journal_lines?.length) {
+      await JournalEntryService.createAutoEntry({
+        entryDate: payment.payment_date,
+        description: `Payment received for ${invoice.invoice_number}`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'payment',
+        sourceId: payment.id,
+      });
+    }
     res.status(201).json({ payment, invoice: await invoice.reload() });
   } catch (err) { next(err); }
 });
@@ -74,6 +84,7 @@ router.delete('/:id', async (req, res, next) => {
     });
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
 
+    await JournalEntryService.deleteAutoEntriesForSource('payment', payment.id);
     await payment.destroy();
 
     // Recalculate invoice after deletion

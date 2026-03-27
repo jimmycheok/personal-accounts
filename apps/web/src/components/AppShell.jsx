@@ -23,6 +23,9 @@ import {
   Document,
   UserMultiple,
   Bot,
+  Catalog,
+  Notebook,
+  ReportData,
 } from '@carbon/icons-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -57,6 +60,9 @@ export default function AppShell({ children }) {
     { label: 'Cash Flow', path: '/cash-flow', icon: ChartLine },
     { label: 'Bank Recon', path: '/bank-reconciliation', icon: PiggyBank },
     { label: 'Mileage', path: '/mileage', icon: CarFront },
+    { label: 'Chart of Accounts', path: '/chart-of-accounts', icon: Catalog },
+    { label: 'General Ledger', path: '/general-ledger', icon: Notebook },
+    { label: 'Reports', path: '/reports', icon: ReportData },
     { label: 'Documents', path: '/documents', icon: Folder },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];

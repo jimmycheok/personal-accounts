@@ -26,6 +26,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
 import PaymentModal from '../../components/PaymentModal.jsx';
 import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
+import GLReviewModal from '../../components/GLReviewModal.jsx';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray', sent: 'blue', paid: 'green', overdue: 'red', void: 'magenta', partial: 'cyan',
@@ -39,6 +41,8 @@ export default function InvoiceDetailPage() {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState('');
   const [notification, setNotification] = useState(null);
+  const [glReview, setGlReview] = useState({ open: false, type: '', data: null });
+  const [confirmVoidOpen, setConfirmVoidOpen] = useState(false);
 
   const fetchInvoice = async () => {
     try {
@@ -58,28 +62,40 @@ export default function InvoiceDetailPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleSend = async () => {
-    setActionLoading('send');
-    try {
-      await api.post(`/invoices/${id}/send`);
-      showNotif('success', 'Invoice sent successfully');
-      fetchInvoice();
-    } catch (err) {
-      showNotif('error', err.response?.data?.error || 'Failed to send');
-    } finally {
-      setActionLoading('');
-    }
+  const handleSend = () => {
+    setGlReview({
+      open: true, type: 'invoice_send',
+      data: { invoice_number: invoice.invoice_number, customer_name: invoice.customer?.name, subtotal: invoice.subtotal, tax_total: invoice.tax_total, total: invoice.total },
+    });
   };
 
-  const handleVoid = async () => {
-    if (!window.confirm('Void this invoice? This cannot be undone.')) return;
-    setActionLoading('void');
+  const handleVoid = () => {
+    setConfirmVoidOpen(true);
+  };
+
+  const confirmVoid = () => {
+    setConfirmVoidOpen(false);
+    setGlReview({
+      open: true, type: 'invoice_void',
+      data: { invoice_number: invoice.invoice_number, total: invoice.total },
+    });
+  };
+
+  const handleGLAccept = async (journalLines) => {
+    const type = glReview.type;
+    setGlReview({ open: false, type: '', data: null });
+    setActionLoading(type === 'invoice_send' ? 'send' : 'void');
     try {
-      await api.patch(`/invoices/${id}/void`);
-      showNotif('success', 'Invoice voided');
+      if (type === 'invoice_send') {
+        await api.post(`/invoices/${id}/send`, { journal_lines: journalLines });
+        showNotif('success', 'Invoice sent successfully');
+      } else if (type === 'invoice_void') {
+        await api.post(`/invoices/${id}/void`, { reason: 'Voided', journal_lines: journalLines });
+        showNotif('success', 'Invoice voided');
+      }
       fetchInvoice();
     } catch (err) {
-      showNotif('error', err.response?.data?.error || 'Failed to void');
+      showNotif('error', err.response?.data?.error || 'Action failed');
     } finally {
       setActionLoading('');
     }
@@ -205,7 +221,7 @@ export default function InvoiceDetailPage() {
           <tbody>
             {invoice.items?.map((item, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                <td style={{ padding: '0.75rem 0.5rem' }}>{item.description}</td>
+                <td style={{ padding: '0.75rem 0.5rem', whiteSpace: 'pre-line' }}>{item.description}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>{item.quantity}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>RM {Number(item.unit_price).toFixed(2)}</td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>{item.tax_rate || 0}%</td>
@@ -296,8 +312,26 @@ export default function InvoiceDetailPage() {
         open={paymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
         invoiceId={id}
+        invoiceNumber={invoice.invoice_number}
         amountDue={invoice.amount_due}
         onSuccess={fetchInvoice}
+      />
+
+      <ConfirmModal
+        open={confirmVoidOpen}
+        title="Void Invoice"
+        message="Void this invoice? This cannot be undone."
+        confirmText="Void"
+        onConfirm={confirmVoid}
+        onCancel={() => setConfirmVoidOpen(false)}
+      />
+
+      <GLReviewModal
+        open={glReview.open}
+        type={glReview.type}
+        data={glReview.data}
+        onAccept={handleGLAccept}
+        onCancel={() => setGlReview({ open: false, type: '', data: null })}
       />
     </div>
   );

@@ -22,6 +22,7 @@ import {
 import { Add } from '@carbon/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api.js';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray', sent: 'blue', accepted: 'green', declined: 'red', expired: 'magenta', converted: 'cyan',
@@ -43,6 +44,7 @@ export default function QuotationsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [confirmConvert, setConfirmConvert] = useState({ open: false, id: null });
 
   const fetchQuotations = async () => {
     setLoading(true);
@@ -58,13 +60,18 @@ export default function QuotationsPage() {
 
   useEffect(() => { fetchQuotations(); }, [statusFilter]);
 
-  const handleConvert = async (id) => {
-    if (!window.confirm('Convert this quotation to an invoice?')) return;
+  const handleConvert = (id) => {
+    setConfirmConvert({ open: true, id });
+  };
+
+  const confirmConvertAction = async () => {
+    const id = confirmConvert.id;
+    setConfirmConvert({ open: false, id: null });
     try {
       const res = await api.post(`/quotations/${id}/convert`);
       navigate(`/invoices/${res.data.id}`);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to convert');
+      console.error(err.response?.data?.error || 'Failed to convert');
     }
   };
 
@@ -155,6 +162,16 @@ export default function QuotationsPage() {
           )}
         </DataTable>
       )}
+
+      <ConfirmModal
+        open={confirmConvert.open}
+        title="Convert to Invoice"
+        message="Convert this quotation to an invoice?"
+        danger={false}
+        confirmText="Convert"
+        onConfirm={confirmConvertAction}
+        onCancel={() => setConfirmConvert({ open: false, id: null })}
+      />
     </div>
   );
 }

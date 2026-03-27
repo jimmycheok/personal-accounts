@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifyJwt } from '../middlewares/verifyJwt.js';
 import { MileageLog } from '../models/index.js';
 import { Op } from 'sequelize';
+import JournalEntryService from '../services/JournalEntryService.js';
 
 const router = Router();
 router.use(verifyJwt);
@@ -56,6 +57,16 @@ router.post('/', async (req, res, next) => {
       tax_year,
       notes,
     });
+
+    if (req.body.journal_lines?.length) {
+      await JournalEntryService.createAutoEntry({
+        entryDate: log_date,
+        description: `Mileage: ${from_location} → ${to_location} (${km} km)`,
+        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+        sourceType: 'mileage',
+        sourceId: log.id,
+      });
+    }
 
     res.status(201).json(log);
   } catch (err) { next(err); }
@@ -121,6 +132,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const log = await MileageLog.findByPk(req.params.id);
     if (!log) return res.status(404).json({ error: 'Mileage log not found' });
+    await JournalEntryService.deleteAutoEntriesForSource('mileage', log.id);
     await log.destroy();
     res.status(204).send();
   } catch (err) { next(err); }

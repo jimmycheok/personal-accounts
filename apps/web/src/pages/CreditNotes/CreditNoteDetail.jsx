@@ -16,6 +16,8 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api.js';
 import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
+import GLReviewModal from '../../components/GLReviewModal.jsx';
+import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const STATUS_COLOR = {
   draft: 'gray', submitted: 'blue', applied: 'green', cancelled: 'magenta',
@@ -36,6 +38,8 @@ export default function CreditNoteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [notification, setNotification] = useState(null);
+  const [glReview, setGlReview] = useState({ open: false, type: '', data: null });
+  const [confirmAction, setConfirmAction] = useState({ open: false, type: null });
 
   const fetchCreditNote = async () => {
     try {
@@ -55,28 +59,40 @@ export default function CreditNoteDetailPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleSend = async () => {
-    setActionLoading('send');
-    try {
-      await api.post(`/credit-notes/${id}/send`);
-      showNotif('success', 'Credit note submitted');
-      fetchCreditNote();
-    } catch (err) {
-      showNotif('error', err.response?.data?.error || 'Failed to send');
-    } finally {
-      setActionLoading('');
-    }
+  const handleSend = () => {
+    setGlReview({
+      open: true, type: 'credit_note_send',
+      data: { credit_note_number: creditNote.credit_note_number, amount: creditNote.amount, reason: creditNote.reason },
+    });
   };
 
-  const handleVoid = async () => {
-    if (!window.confirm('Void this credit note? This cannot be undone.')) return;
-    setActionLoading('void');
+  const handleVoid = () => {
+    setConfirmAction({ open: true, type: 'void' });
+  };
+
+  const confirmVoid = () => {
+    setConfirmAction({ open: false, type: null });
+    setGlReview({
+      open: true, type: 'credit_note_void',
+      data: { credit_note_number: creditNote.credit_note_number, amount: creditNote.amount },
+    });
+  };
+
+  const handleGLAccept = async (journalLines) => {
+    const type = glReview.type;
+    setGlReview({ open: false, type: '', data: null });
+    setActionLoading(type === 'credit_note_send' ? 'send' : 'void');
     try {
-      await api.post(`/credit-notes/${id}/void`);
-      showNotif('success', 'Credit note voided');
+      if (type === 'credit_note_send') {
+        await api.post(`/credit-notes/${id}/send`, { journal_lines: journalLines });
+        showNotif('success', 'Credit note submitted');
+      } else {
+        await api.post(`/credit-notes/${id}/void`, { reason: 'Voided', journal_lines: journalLines });
+        showNotif('success', 'Credit note voided');
+      }
       fetchCreditNote();
     } catch (err) {
-      showNotif('error', err.response?.data?.error || 'Failed to void');
+      showNotif('error', err.response?.data?.error || 'Action failed');
     } finally {
       setActionLoading('');
     }
@@ -109,8 +125,12 @@ export default function CreditNoteDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm('Delete this credit note? This cannot be undone.')) return;
+  const handleDelete = () => {
+    setConfirmAction({ open: true, type: 'delete' });
+  };
+
+  const confirmDelete = async () => {
+    setConfirmAction({ open: false, type: null });
     try {
       await api.delete(`/credit-notes/${id}`);
       navigate('/credit-notes');
@@ -230,6 +250,23 @@ export default function CreditNoteDetailPage() {
       <Tile style={{ padding: '1.5rem' }}>
         <AttachmentsPanel subjectType="credit_note" subjectId={id} />
       </Tile>
+
+      <GLReviewModal
+        open={glReview.open}
+        type={glReview.type}
+        data={glReview.data}
+        onAccept={handleGLAccept}
+        onCancel={() => setGlReview({ open: false, type: '', data: null })}
+      />
+
+      <ConfirmModal
+        open={confirmAction.open}
+        title={confirmAction.type === 'void' ? 'Void Credit Note' : 'Delete Credit Note'}
+        message={confirmAction.type === 'void' ? 'Void this credit note? This cannot be undone.' : 'Delete this credit note? This cannot be undone.'}
+        confirmText={confirmAction.type === 'void' ? 'Void' : 'Delete'}
+        onConfirm={confirmAction.type === 'void' ? confirmVoid : confirmDelete}
+        onCancel={() => setConfirmAction({ open: false, type: null })}
+      />
     </div>
   );
 }
