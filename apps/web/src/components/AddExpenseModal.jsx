@@ -36,7 +36,6 @@ const MIME_LABEL = {
   'image/png': { label: 'PNG', type: 'purple' },
   'image/gif': { label: 'GIF', type: 'purple' },
   'image/webp': { label: 'WEBP', type: 'purple' },
-  'text/csv': { label: 'CSV', type: 'teal' },
 };
 
 function formatBytes(bytes) {
@@ -208,7 +207,7 @@ export default function AddExpenseModal({ open, onClose, prefill, onSuccess }) {
                   type="file"
                   multiple
                   style={{ display: 'none' }}
-                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
                   onChange={handleStageFiles}
                 />
                 <Button

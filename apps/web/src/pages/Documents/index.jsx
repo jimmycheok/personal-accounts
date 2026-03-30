@@ -24,7 +24,7 @@ import {
   Modal,
   TextInput,
 } from '@carbon/react';
-import { Upload, Download, TrashCan, Folder } from '@carbon/icons-react';
+import { Upload, Download, TrashCan, Folder, View } from '@carbon/icons-react';
 import { format } from 'date-fns';
 import api from '../../services/api.js';
 import ConfirmModal from '../../components/ConfirmModal.jsx';
@@ -107,10 +107,10 @@ function UploadModal({ open, onClose, onSuccess }) {
           onChange={e => setDescription(e.target.value)} placeholder="e.g. TNB Utility Bill March 2025" />
         <FileUploader
           labelTitle="Select Files"
-          labelDescription="PDF, images, Word documents accepted"
+          labelDescription="PDF and image files only (JPG, PNG, GIF, WEBP)"
           buttonLabel="Choose Files"
           filenameStatus="edit"
-          accept={['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.xlsx', '.csv']}
+          accept={['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']}
           multiple
           onChange={e => setFiles(Array.from(e.target.files || []))}
         />
@@ -118,6 +118,74 @@ function UploadModal({ open, onClose, onSuccess }) {
           <p style={{ fontSize: '0.875rem', color: '#525252' }}>
             {files.length} file(s) selected: {files.map(f => f.name).join(', ')}
           </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+const PREVIEWABLE_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+function isPreviewable(doc) {
+  return PREVIEWABLE_MIMES.includes(doc?.mime_type);
+}
+
+function PreviewModal({ open, doc, onClose }) {
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open || !doc) { setPreviewUrl(null); return; }
+    let revoked = false;
+    setLoading(true);
+    setError('');
+    api.get(`/documents/${doc.id}/preview`, { responseType: 'blob' })
+      .then(res => {
+        if (revoked) return;
+        const url = window.URL.createObjectURL(new Blob([res.data], { type: doc.mime_type }));
+        setPreviewUrl(url);
+      })
+      .catch(() => { if (!revoked) setError('Failed to load preview'); })
+      .finally(() => { if (!revoked) setLoading(false); });
+    return () => { revoked = true; if (previewUrl) window.URL.revokeObjectURL(previewUrl); };
+  }, [open, doc?.id]);
+
+  // Cleanup URL on close
+  useEffect(() => {
+    if (!open && previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  }, [open]);
+
+  const isPdf = doc?.mime_type === 'application/pdf';
+  const isImage = doc?.mime_type?.startsWith('image/');
+
+  return (
+    <Modal
+      open={open}
+      onRequestClose={onClose}
+      modalHeading={doc?.original_name || doc?.file_name || 'Preview'}
+      passiveModal
+      size="lg"
+    >
+      <div style={{ minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {loading && <InlineLoading description="Loading preview..." />}
+        {error && <p style={{ color: '#da1e28' }}>{error}</p>}
+        {previewUrl && isPdf && (
+          <iframe
+            src={previewUrl}
+            title="PDF Preview"
+            style={{ width: '100%', height: '70vh', border: 'none' }}
+          />
+        )}
+        {previewUrl && isImage && (
+          <img
+            src={previewUrl}
+            alt={doc?.original_name || 'Document preview'}
+            style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+          />
         )}
       </div>
     </Modal>
@@ -132,6 +200,7 @@ export default function DocumentsPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [notification, setNotification] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -262,6 +331,9 @@ export default function DocumentsPage() {
                               ? <Tag type={CAT_COLOR[cell.value] || 'gray'}>{cell.value?.charAt(0).toUpperCase() + cell.value?.slice(1)}</Tag>
                               : cell.info.header === 'actions'
                               ? <OverflowMenu flipped size="sm">
+                                  {isPreviewable(docData) && (
+                                    <OverflowMenuItem itemText="View" onClick={() => setPreviewDoc(docData)} />
+                                  )}
                                   <OverflowMenuItem itemText="Download" onClick={() => handleDownload(docData)} />
                                   <OverflowMenuItem itemText="Delete" isDelete onClick={() => handleDelete(row.id)} />
                                 </OverflowMenu>
@@ -292,6 +364,12 @@ export default function DocumentsPage() {
         open={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
         onSuccess={() => { fetchDocuments(); showNotif('success', 'Documents uploaded successfully'); }}
+      />
+
+      <PreviewModal
+        open={!!previewDoc}
+        doc={previewDoc}
+        onClose={() => setPreviewDoc(null)}
       />
 
       <ConfirmModal

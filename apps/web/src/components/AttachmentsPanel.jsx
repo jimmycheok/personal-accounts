@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Button,
   InlineLoading,
+  Modal,
   Tag,
 } from '@carbon/react';
-import { Upload, Download, TrashCan, Attachment } from '@carbon/icons-react';
+import { Upload, Download, TrashCan, Attachment, View } from '@carbon/icons-react';
 import api from '../services/api.js';
 import ConfirmModal from './ConfirmModal.jsx';
 
@@ -14,9 +16,6 @@ const MIME_LABEL = {
   'image/png': { label: 'PNG', type: 'purple' },
   'image/gif': { label: 'GIF', type: 'purple' },
   'image/webp': { label: 'WEBP', type: 'purple' },
-  'text/csv': { label: 'CSV', type: 'teal' },
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { label: 'XLSX', type: 'teal' },
-  'application/vnd.ms-excel': { label: 'XLS', type: 'teal' },
 };
 
 function formatBytes(bytes) {
@@ -39,6 +38,9 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, doc: null });
   const [error, setError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   const fetchAttachments = async () => {
@@ -96,6 +98,24 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
     }
   };
 
+  const handlePreview = (doc) => {
+    setPreviewDoc(doc);
+    setPreviewLoading(true);
+    api.get(`/documents/${doc.id}/preview`, { responseType: 'blob' })
+      .then(res => {
+        const url = window.URL.createObjectURL(new Blob([res.data], { type: doc.mime_type }));
+        setPreviewUrl(url);
+      })
+      .catch(() => setError('Failed to load preview'))
+      .finally(() => setPreviewLoading(false));
+  };
+
+  const closePreview = () => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewDoc(null);
+    setPreviewUrl(null);
+  };
+
   const handleDelete = (doc) => {
     setConfirmDelete({ open: true, doc });
   };
@@ -130,7 +150,7 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
             type="file"
             style={{ display: 'none' }}
             onChange={handleUpload}
-            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
           />
           <Button
             kind="tertiary"
@@ -178,6 +198,15 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
                 <Button
                   kind="ghost"
                   size="sm"
+                  renderIcon={View}
+                  iconDescription="Preview"
+                  hasIconOnly
+                  onClick={() => handlePreview(doc)}
+                  tooltipPosition="left"
+                />
+                <Button
+                  kind="ghost"
+                  size="sm"
                   renderIcon={Download}
                   iconDescription="Download"
                   hasIconOnly
@@ -198,6 +227,36 @@ export default function AttachmentsPanel({ subjectType, subjectId }) {
             );
           })}
         </div>
+      )}
+
+      {createPortal(
+        <Modal
+          open={!!previewDoc}
+          onRequestClose={closePreview}
+          modalHeading={previewDoc?.original_name || previewDoc?.file_name || 'Preview'}
+          passiveModal
+          size="lg"
+          style={{ zIndex: 9100 }}
+        >
+          <div style={{ minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {previewLoading && <InlineLoading description="Loading preview..." />}
+            {previewUrl && previewDoc?.mime_type === 'application/pdf' && (
+              <iframe
+                src={previewUrl}
+                title="PDF Preview"
+                style={{ width: '100%', height: '60vh', border: 'none' }}
+              />
+            )}
+            {previewUrl && previewDoc?.mime_type?.startsWith('image/') && (
+              <img
+                src={previewUrl}
+                alt={previewDoc?.original_name || 'Preview'}
+                style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain' }}
+              />
+            )}
+          </div>
+        </Modal>,
+        document.body
       )}
 
       <ConfirmModal

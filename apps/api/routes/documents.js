@@ -37,10 +37,46 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /documents/:id/preview — serve file inline for preview
+router.get('/:id/preview', async (req, res, next) => {
+  try {
+    const doc = await Document.findByPk(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(doc.mime_type)) {
+      return res.status(415).json({ error: 'Preview not available for this file type' });
+    }
+
+    const buffer = await StorageService.download(doc.storage_path);
+
+    res.set({
+      'Content-Type': doc.mime_type,
+      'Content-Disposition': `inline; filename="${doc.original_name || doc.file_name}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.send(buffer);
+  } catch (err) { next(err); }
+});
+
+const ALLOWED_UPLOAD_MIMES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
+
 // POST /documents — multipart upload; body must include subject_type + subject_id
 router.post('/', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    if (!ALLOWED_UPLOAD_MIMES.includes(req.file.mimetype)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+      return res.status(400).json({ error: 'Only PDF and image files (JPG, PNG, GIF, WEBP) are allowed' });
+    }
 
     const { subject_type, subject_id, category } = req.body;
     const docCategory = category || subject_type || 'general';

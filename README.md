@@ -53,7 +53,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 ### Supporting Tools
 - **Bank reconciliation** — import CSV bank statements and match rows to invoices or expenses
 - **Mileage log** — track business trips with LHDN tiered deduction calculation (RM 0.60/km first 200 km, RM 0.40/km thereafter)
-- **Document storage** — attach files to any record; store locally, on AWS S3, or Google Drive
+- **Document storage** — attach PDF and image files to any record; in-app preview for images and PDFs; store locally, on AWS S3, or Google Drive
 - **Recurring templates** — auto-generate repeating invoices or expenses on a schedule
 - **Audit log** — all financial mutations are recorded with before/after snapshots
 
@@ -146,7 +146,7 @@ personal-accountant/
 | `/reports` | Financial reports landing page |
 | `/reports/profit-loss` | P&L statement with Borang B grouping, PDF download, year-end close |
 | `/reports/balance-sheet` | Balance Sheet with Assets = Liabilities + Equity verification |
-| `/documents` | File attachments across all records |
+| `/documents` | File attachments across all records with in-app image/PDF preview |
 | `/settings` | Business profile, e-invoice config, storage, preferences |
 
 ---
@@ -217,6 +217,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.2](docs/releases/v2.2.md) | 2026-03-30 | Document preview modal, PDF/image-only upload constraint, mileage rounding fix |
 | [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage, fix mileage deduction rate to match LHDN tiered schedule |
 | [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |
 | [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |

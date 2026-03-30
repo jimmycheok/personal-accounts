@@ -410,6 +410,20 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 ### AddExpenseModal prefill prop
 - `prefill` prop now also accepts `category_id` (number) and `notes` (string), in addition to the original OCR-only fields (`vendor`, `description`, `amount`, `date`)
 
+## Specification Corrections (discovered during v2.2 dev)
+
+### Document upload MIME type restriction
+- `POST /documents` now rejects files that are not PDF or image (JPG, PNG, GIF, WEBP) — returns 400 with error message
+- Previously accepted any file type (CSV, XLSX, DOC, DOCX, etc.)
+- Frontend `accept` attributes updated to match: Documents page, AttachmentsPanel, and AddExpenseModal all restricted to `.pdf,.jpg,.jpeg,.png,.gif,.webp`
+
+### New API route: document preview
+- `GET /documents/:id/preview` — serves the file inline (`Content-Disposition: inline`) for in-browser preview
+- Only allows preview for PDF and image MIME types; returns 415 for other types
+
+### Mileage deductible rounding
+- Frontend mileage preview now rounds `deductible_amount` to 2 decimal places (`Math.round(km * rate * 100) / 100`) before displaying in the GL review modal
+
 ---
 
 ## Release Log
