@@ -98,7 +98,7 @@ export default function MileagePage() {
     }
     const km = Number(form.km) * (form.round_trip ? 2 : 1);
     const rate = parseFloat(process.env.MILEAGE_RATE_PER_KM) || MY_MILEAGE_RATE;
-    const deductible = km * rate;
+    const deductible = Math.round(km * rate * 100) / 100;
     setPendingTrip({
       log_date: form.log_date,
       from_location: form.from_location,
