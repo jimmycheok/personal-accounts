@@ -83,13 +83,18 @@ export default function PaymentVoucherForm() {
         const res = await api.post('/payment-vouchers', payload);
         voucherId = res.data.id;
       }
-      // Upload staged attachments
+      // Upload staged attachments — non-blocking: the voucher is already saved,
+      // so a failed upload must not trigger the "save failed" path (which would duplicate on retry).
       for (const file of stagedFiles) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('subject_type', 'payment_voucher');
-        fd.append('subject_id', String(voucherId));
-        await api.post('/documents', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('subject_type', 'payment_voucher');
+          fd.append('subject_id', String(voucherId));
+          await api.post('/documents', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        } catch (uploadErr) {
+          console.warn(`Attachment "${file.name}" failed to upload:`, uploadErr?.response?.data?.error || uploadErr.message);
+        }
       }
       navigate(`/payment-vouchers/${voucherId}`);
     } catch (err) {
@@ -112,7 +117,7 @@ export default function PaymentVoucherForm() {
           <DatePickerInput id="pv-date" labelText="Voucher Date" placeholder="YYYY-MM-DD" />
         </DatePicker>
         <Select id="pv-method" labelText="Payment Method" value={form.payment_method} onChange={set('payment_method')}>
-          {METHODS.map(m => <SelectItem key={m} value={m} text={m.replace('_', ' ')} />)}
+          {METHODS.map(m => <SelectItem key={m} value={m} text={m.replace(/_/g, ' ')} />)}
         </Select>
         <TextInput id="pv-payee" labelText="Payee Name *" value={form.payee_name} onChange={set('payee_name')} />
         <TextInput id="pv-ref" labelText="Payment Reference" value={form.payment_reference} onChange={set('payment_reference')} placeholder="Cheque no. / transfer ref" />
@@ -122,6 +127,8 @@ export default function PaymentVoucherForm() {
       </div>
 
       <TextInput id="pv-desc" labelText="Description" value={form.description} onChange={set('description')} style={{ marginBottom: '1rem' }} />
+
+      <TextArea id="pv-notes" labelText="Notes" value={form.notes} onChange={set('notes')} rows={2} style={{ marginBottom: '1rem' }} />
 
       {/* Line items */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1rem 0 0.5rem' }}>
