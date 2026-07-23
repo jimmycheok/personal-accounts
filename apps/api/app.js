@@ -30,6 +30,7 @@ import mileageRoutes from './routes/mileage.js';
 import exportRoutes from './routes/export.js';
 import accountsRoutes from './routes/accounts.js';
 import journalEntriesRoutes from './routes/journalEntries.js';
+import paymentVouchersRoutes from './routes/paymentVouchers.js';
 import reportsRoutes from './routes/reports.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -82,6 +83,7 @@ app.use(`${v1}/mileage`, mileageRoutes);
 app.use(`${v1}/export`, exportRoutes);
 app.use(`${v1}/accounts`, accountsRoutes);
 app.use(`${v1}/journal-entries`, journalEntriesRoutes);
+app.use(`${v1}/payment-vouchers`, paymentVouchersRoutes);
 app.use(`${v1}/reports`, reportsRoutes);
 
 // 404
