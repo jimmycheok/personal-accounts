@@ -76,8 +76,6 @@ Account.hasMany(JournalEntryLine, { foreignKey: 'account_id', as: 'journalEntryL
 // Payment Vouchers
 PaymentVoucher.hasMany(PaymentVoucherLine, { foreignKey: 'payment_voucher_id', as: 'lines' });
 PaymentVoucherLine.belongsTo(PaymentVoucher, { foreignKey: 'payment_voucher_id', as: 'voucher' });
-PaymentVoucherLine.belongsTo(Account, { foreignKey: 'account_id', as: 'account' });
-Account.hasMany(PaymentVoucherLine, { foreignKey: 'account_id', as: 'paymentVoucherLines' });
 
 export {
   sequelize,

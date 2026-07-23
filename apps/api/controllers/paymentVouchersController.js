@@ -14,7 +14,7 @@ import JournalEntryService from '../services/JournalEntryService.js';
 import PdfService from '../services/PdfService.js';
 import StorageService from '../services/StorageService.js';
 
-// PV-YYYYMM-NNNN, assigned at approval
+// PV-YYYYMM-NNNN, assigned when the voucher is saved (GL posted)
 async function getNextPvNumber(date) {
   const d = new Date(date);
   const yyyymm = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -35,7 +35,7 @@ function computeTotal(lines) {
   return (lines || []).reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
 }
 
-const LINE_INCLUDE = { model: PaymentVoucherLine, as: 'lines', include: [{ model: Account, as: 'account' }] };
+const LINE_INCLUDE = { model: PaymentVoucherLine, as: 'lines' };
 
 export async function list(req, res, next) {
   try {
@@ -59,27 +59,53 @@ export async function list(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// Create a voucher. When balanced journal_lines are supplied (the normal flow via
+// the GL modal), the entry posts to the GL immediately and the voucher is marked
+// approved with a PV number — mirroring the Expense create flow.
 export async function create(req, res, next) {
   const t = await sequelize.transaction();
   try {
-    const { lines = [], ...data } = req.body;
+    const { lines = [], journal_lines, status, pv_number, approved_at, total_amount, ...data } = req.body;
     const total = computeTotal(lines);
-    const voucher = await PaymentVoucher.create(
-      { ...data, status: 'draft', pv_number: null, total_amount: total },
-      { transaction: t },
-    );
+    const posting = Array.isArray(journal_lines) && journal_lines.length >= 2;
+    const pvNumber = posting ? await getNextPvNumber(data.pv_date) : null;
+
+    const voucher = await PaymentVoucher.create({
+      ...data,
+      pv_number: pvNumber,
+      total_amount: total,
+      status: posting ? 'approved' : 'draft',
+      approved_at: posting ? new Date() : null,
+    }, { transaction: t });
+
     if (lines.length) {
       await PaymentVoucherLine.bulkCreate(
         lines.map(l => ({
           payment_voucher_id: voucher.id,
-          account_id: l.account_id,
-          description: l.description || null,
+          service_item: l.service_item || null,
           amount: parseFloat(l.amount) || 0,
         })),
         { transaction: t },
       );
     }
     await t.commit();
+
+    if (posting) {
+      // createAutoEntry re-validates DR = CR and throws if unbalanced
+      await JournalEntryService.createAutoEntry({
+        entryDate: voucher.pv_date,
+        description: `Payment Voucher ${pvNumber} — ${voucher.payee_name}`,
+        lines: journal_lines.map(l => ({
+          accountId: l.account_id,
+          debit: parseFloat(l.debit || 0),
+          credit: parseFloat(l.credit || 0),
+          description: l.description || null,
+        })),
+        sourceType: 'payment_voucher',
+        sourceId: voucher.id,
+      });
+    }
+
     await writeAuditLog({ action: 'create', subjectType: 'PaymentVoucher', subjectId: voucher.id });
     const full = await PaymentVoucher.findByPk(voucher.id, { include: [LINE_INCLUDE] });
     res.status(201).json(full);
@@ -101,6 +127,7 @@ export async function getById(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// Edit a not-yet-posted draft (kept for completeness; the normal flow posts on create).
 export async function update(req, res, next) {
   const t = await sequelize.transaction();
   try {
@@ -110,14 +137,13 @@ export async function update(req, res, next) {
       await t.rollback();
       return res.status(409).json({ error: 'Only draft vouchers can be edited' });
     }
-    const { lines, status, pv_number, approved_at, total_amount, ...data } = req.body;
+    const { lines, status, pv_number, approved_at, total_amount, journal_lines, ...data } = req.body;
     if (Array.isArray(lines)) {
       await PaymentVoucherLine.destroy({ where: { payment_voucher_id: voucher.id }, transaction: t });
       await PaymentVoucherLine.bulkCreate(
         lines.map(l => ({
           payment_voucher_id: voucher.id,
-          account_id: l.account_id,
-          description: l.description || null,
+          service_item: l.service_item || null,
           amount: parseFloat(l.amount) || 0,
         })),
         { transaction: t },
@@ -134,46 +160,11 @@ export async function update(req, res, next) {
   }
 }
 
-export async function approve(req, res, next) {
-  try {
-    const voucher = await PaymentVoucher.findByPk(req.params.id, { include: [LINE_INCLUDE] });
-    if (!voucher) return res.status(404).json({ error: 'Payment voucher not found' });
-    if (voucher.status !== 'draft') return res.status(409).json({ error: 'Voucher is not a draft' });
-    if (!voucher.lines?.length) return res.status(400).json({ error: 'Voucher has no line items' });
-
-    const journalLines = req.body.journal_lines;
-    if (!Array.isArray(journalLines) || journalLines.length < 2) {
-      return res.status(400).json({ error: 'journal_lines (at least 2) are required to approve' });
-    }
-
-    const pvNumber = await getNextPvNumber(voucher.pv_date);
-
-    // createAutoEntry re-validates DR = CR and throws if unbalanced
-    await JournalEntryService.createAutoEntry({
-      entryDate: voucher.pv_date,
-      description: `Payment Voucher ${pvNumber} — ${voucher.payee_name}`,
-      lines: journalLines.map(l => ({
-        accountId: l.account_id,
-        debit: parseFloat(l.debit || 0),
-        credit: parseFloat(l.credit || 0),
-        description: l.description || null,
-      })),
-      sourceType: 'payment_voucher',
-      sourceId: voucher.id,
-    });
-
-    await voucher.update({ pv_number: pvNumber, status: 'approved', approved_at: new Date() });
-    await writeAuditLog({ action: 'approve', subjectType: 'PaymentVoucher', subjectId: voucher.id });
-    const full = await PaymentVoucher.findByPk(voucher.id, { include: [LINE_INCLUDE] });
-    res.json(full);
-  } catch (err) { next(err); }
-}
-
 export async function voidVoucher(req, res, next) {
   try {
     const voucher = await PaymentVoucher.findByPk(req.params.id);
     if (!voucher) return res.status(404).json({ error: 'Payment voucher not found' });
-    if (voucher.status !== 'approved') return res.status(409).json({ error: 'Only approved vouchers can be voided' });
+    if (voucher.status !== 'approved') return res.status(409).json({ error: 'Only posted vouchers can be voided' });
     await JournalEntryService.deleteAutoEntriesForSource('payment_voucher', voucher.id);
     await voucher.update({ status: 'voided' });
     await writeAuditLog({ action: 'void', subjectType: 'PaymentVoucher', subjectId: voucher.id });
@@ -186,7 +177,7 @@ export async function remove(req, res, next) {
   try {
     const voucher = await PaymentVoucher.findByPk(req.params.id);
     if (!voucher) return res.status(404).json({ error: 'Payment voucher not found' });
-    if (voucher.status !== 'draft') return res.status(409).json({ error: 'Only draft vouchers can be deleted' });
+    if (voucher.status !== 'draft') return res.status(409).json({ error: 'Only draft vouchers can be deleted; void a posted voucher instead' });
 
     // Clean up any staged attachments
     const docs = await Document.findAll({ where: { subject_type: 'payment_voucher', subject_id: voucher.id } });

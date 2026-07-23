@@ -144,11 +144,9 @@ class PdfService {
     let html = renderTemplate('payment-voucher.html', data);
 
     const linesHtml = (voucher.lines || []).map(l => {
-      const desc = String(l.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const acct = l.account ? `${l.account.code} — ${l.account.name}` : '';
+      const item = String(l.service_item || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<tr>
-        <td>${desc}</td>
-        <td>${acct}</td>
+        <td>${item}</td>
         <td class="amt">${currency} ${Number(l.amount || 0).toFixed(2)}</td>
       </tr>`;
     }).join('\n');
