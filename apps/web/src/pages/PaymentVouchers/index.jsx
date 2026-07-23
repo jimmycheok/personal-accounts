@@ -7,6 +7,7 @@ import {
 import { Add } from '@carbon/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api.js';
+import PaymentVoucherModal from '../../components/PaymentVoucherModal.jsx';
 
 const STATUS_TAG = { draft: 'gray', approved: 'green', voided: 'red' };
 
@@ -17,6 +18,7 @@ export default function PaymentVouchersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
 
   const load = () => {
     api.get('/payment-vouchers', { params: { search: search || undefined, limit: 500 } })
@@ -57,7 +59,7 @@ export default function PaymentVouchersPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.75rem', fontWeight: 400 }}>Payment Vouchers</h1>
-        <Button renderIcon={Add} onClick={() => navigate('/payment-vouchers/new')}>New Payment Voucher</Button>
+        <Button renderIcon={Add} onClick={() => setModalOpen(true)}>New Payment Voucher</Button>
       </div>
 
       {error && <InlineNotification kind="error" title={error} onClose={() => setError('')} style={{ marginBottom: '1rem' }} />}
@@ -93,7 +95,6 @@ export default function PaymentVouchersPage() {
                             <TableCell key={cell.id} onClick={(e) => e.stopPropagation()}>
                               <OverflowMenu flipped aria-label="Actions">
                                 <OverflowMenuItem itemText="View" onClick={() => navigate(`/payment-vouchers/${row.id}`)} />
-                                {v.status === 'draft' && <OverflowMenuItem itemText="Edit" onClick={() => navigate(`/payment-vouchers/${row.id}/edit`)} />}
                                 {v.status === 'draft' && <OverflowMenuItem isDelete itemText="Delete" onClick={() => handleDelete(row.id)} />}
                               </OverflowMenu>
                             </TableCell>
@@ -113,6 +114,12 @@ export default function PaymentVouchersPage() {
       <Pagination
         page={page} pageSize={pageSize} pageSizes={[10, 25, 50]} totalItems={rows.length}
         onChange={({ page, pageSize }) => { setPage(page); setPageSize(pageSize); }}
+      />
+
+      <PaymentVoucherModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={() => { setModalOpen(false); load(); }}
       />
     </div>
   );
