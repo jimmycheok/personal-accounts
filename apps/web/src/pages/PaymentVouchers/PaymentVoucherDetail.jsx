@@ -57,7 +57,7 @@ export default function PaymentVoucherDetail() {
 
   const handleApprove = async (journalLines) => {
     setShowGL(false);
-    if (!journalLines?.length) return; // "Skip GL" not allowed for approval
+    if (!journalLines?.length) { setError('A balanced GL entry is required to approve this voucher.'); return; } // "Skip GL" not allowed for approval
     try {
       await api.post(`/payment-vouchers/${id}/approve`, { journal_lines: journalLines });
       load();
