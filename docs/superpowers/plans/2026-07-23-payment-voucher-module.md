@@ -34,7 +34,7 @@ A helper for SQL checks (adjust container name if different):
 
 ```bash
 # psql into the postgres container; DB name/user per docker-compose (personal_accountant / postgres)
-alias pg='docker-compose exec -T postgres psql -U postgres -d personal_accountant -c'
+alias pg='docker-compose exec -T postgres psql -U pa_user -d personal_accountant -c'
 ```
 
 ---
@@ -142,7 +142,7 @@ Expected: output ends with `== 20260723000002-create-payment-voucher-lines: migr
 
 - [ ] **Step 4: Verify tables exist**
 
-Run: `docker-compose exec -T postgres psql -U postgres -d personal_accountant -c "\d payment_vouchers" -c "\d payment_voucher_lines"`
+Run: `docker-compose exec -T postgres psql -U pa_user -d personal_accountant -c "\d payment_vouchers" -c "\d payment_voucher_lines"`
 Expected: both table structures print, `payment_vouchers.status` is an enum with `draft/approved/voided`, `payment_voucher_lines.payment_voucher_id` FK present.
 
 - [ ] **Step 5: Commit**
@@ -618,7 +618,7 @@ Expected: HTTP 200 JSON with `"status":"approved"`, `"pv_number":"PV-202607-0001
 - [ ] **Step 2: Verify the GL entry is balanced and linked**
 
 ```bash
-docker-compose exec -T postgres psql -U postgres -d personal_accountant -c \
+docker-compose exec -T postgres psql -U pa_user -d personal_accountant -c \
 "SELECT je.reference_number, je.source_type, je.source_id, je.status,
         SUM(jel.debit) AS dr, SUM(jel.credit) AS cr
  FROM journal_entries je JOIN journal_entry_lines jel ON jel.journal_entry_id = je.id
@@ -636,7 +636,7 @@ Expected: HTTP 409 `{"error":"Voucher is not a draft"}`.
 
 ```bash
 curl -s -X POST http://localhost:3001/api/v1/payment-vouchers/1/void -H "Authorization: Bearer $TOKEN"
-docker-compose exec -T postgres psql -U postgres -d personal_accountant -c \
+docker-compose exec -T postgres psql -U pa_user -d personal_accountant -c \
 "SELECT COUNT(*) FROM journal_entries WHERE source_type='payment_voucher' AND source_id=1;"
 ```
 Expected: void returns `"status":"voided"`; the count query returns `0` (GL entry removed).
