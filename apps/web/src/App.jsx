@@ -32,6 +32,9 @@ import JournalEntryFormPage from './pages/GeneralLedger/JournalEntryForm.jsx';
 import ReportsPage from './pages/Reports/index.jsx';
 import ProfitLossPage from './pages/Reports/ProfitLoss.jsx';
 import BalanceSheetPage from './pages/Reports/BalanceSheet.jsx';
+import PaymentVouchersPage from './pages/PaymentVouchers/index.jsx';
+import PaymentVoucherFormPage from './pages/PaymentVouchers/PaymentVoucherForm.jsx';
+import PaymentVoucherDetailPage from './pages/PaymentVouchers/PaymentVoucherDetail.jsx';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -63,6 +66,10 @@ function AppRoutes() {
               <Route path="/credit-notes" element={<CreditNotesPage />} />
               <Route path="/credit-notes/:id" element={<CreditNoteDetailPage />} />
               <Route path="/expenses" element={<ExpensesPage />} />
+              <Route path="/payment-vouchers" element={<PaymentVouchersPage />} />
+              <Route path="/payment-vouchers/new" element={<PaymentVoucherFormPage />} />
+              <Route path="/payment-vouchers/:id/edit" element={<PaymentVoucherFormPage />} />
+              <Route path="/payment-vouchers/:id" element={<PaymentVoucherDetailPage />} />
               <Route path="/taxation" element={<TaxationPage />} />
               <Route path="/cash-flow" element={<CashFlowPage />} />
               <Route path="/bank-reconciliation" element={<BankReconciliationPage />} />
