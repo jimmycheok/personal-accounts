@@ -110,7 +110,7 @@ export async function update(req, res, next) {
       await t.rollback();
       return res.status(409).json({ error: 'Only draft vouchers can be edited' });
     }
-    const { lines, ...data } = req.body;
+    const { lines, status, pv_number, approved_at, total_amount, ...data } = req.body;
     if (Array.isArray(lines)) {
       await PaymentVoucherLine.destroy({ where: { payment_voucher_id: voucher.id }, transaction: t });
       await PaymentVoucherLine.bulkCreate(
