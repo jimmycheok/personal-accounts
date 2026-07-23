@@ -27,6 +27,7 @@ const DEFAULT_TEMPLATES = {
   credit_note_send:   [{ code: '4000', side: 'debit' }, { code: '1100', side: 'credit' }],
   credit_note_void:   [{ code: '1100', side: 'debit' }, { code: '4000', side: 'credit' }],
   mileage_create:     [{ code: '6400', side: 'debit' }, { code: '3000', side: 'credit' }],
+  payment_voucher_approve: [{ code: '6100', side: 'debit' }, { code: '1010', side: 'credit' }],
 };
 
 /** Extract the total amount from transaction data regardless of type */
@@ -78,7 +79,7 @@ function buildDefaultLines(type, data, accounts) {
  * Opens immediately with smart defaults. User can edit freely.
  * "AI Suggest" button calls the AI only on demand for token efficiency.
  */
-export default function GLReviewModal({ open, type, data, onAccept, onCancel }) {
+export default function GLReviewModal({ open, type, data, initialLines, onAccept, onCancel }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [explanation, setExplanation] = useState('');
@@ -92,13 +93,17 @@ export default function GLReviewModal({ open, type, data, onAccept, onCancel }) 
     }
   }, [open]);
 
-  // Build default lines when modal opens (no AI call)
+  // Seed lines when the modal opens.
+  // Prefer caller-supplied initialLines (dynamic PV lines); otherwise build from the template.
   useEffect(() => {
-    if (!open || !type || !data) return;
+    if (!open || !type) return;
     setError('');
     setExplanation('');
-    // Wait for accounts to load before building defaults
-    if (accounts.length > 0) {
+    if (initialLines?.length) {
+      setLines(initialLines);
+      return;
+    }
+    if (data && accounts.length > 0) {
       setLines(buildDefaultLines(type, data, accounts));
     }
   }, [open, type, accounts.length]);
