@@ -26,6 +26,8 @@ import CashFlowProjection from './CashFlowProjection.js';
 import Account from './Account.js';
 import JournalEntry from './JournalEntry.js';
 import JournalEntryLine from './JournalEntryLine.js';
+import PaymentVoucher from './PaymentVoucher.js';
+import PaymentVoucherLine from './PaymentVoucherLine.js';
 
 // Associations
 Quotation.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
@@ -71,6 +73,12 @@ JournalEntryLine.belongsTo(JournalEntry, { foreignKey: 'journal_entry_id', as: '
 JournalEntryLine.belongsTo(Account, { foreignKey: 'account_id', as: 'account' });
 Account.hasMany(JournalEntryLine, { foreignKey: 'account_id', as: 'journalEntryLines' });
 
+// Payment Vouchers
+PaymentVoucher.hasMany(PaymentVoucherLine, { foreignKey: 'payment_voucher_id', as: 'lines' });
+PaymentVoucherLine.belongsTo(PaymentVoucher, { foreignKey: 'payment_voucher_id', as: 'voucher' });
+PaymentVoucherLine.belongsTo(Account, { foreignKey: 'account_id', as: 'account' });
+Account.hasMany(PaymentVoucherLine, { foreignKey: 'account_id', as: 'paymentVoucherLines' });
+
 export {
   sequelize,
   Sequelize,
@@ -98,4 +106,6 @@ export {
   Account,
   JournalEntry,
   JournalEntryLine,
+  PaymentVoucher,
+  PaymentVoucherLine,
 };
