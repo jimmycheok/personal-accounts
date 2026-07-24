@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #161616; margin: 40px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #161616; padding-bottom: 12px; }
+  .biz-name { font-size: 18px; font-weight: 700; }
+  .doc-title { font-size: 20px; font-weight: 700; text-align: right; }
+  .meta { margin-top: 16px; width: 100%; }
+  .meta td { padding: 3px 6px; vertical-align: top; }
+  .meta .label { color: #6f6f6f; width: 130px; }
+  table.lines { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  table.lines th { background: #f4f4f4; text-align: left; padding: 8px; border-bottom: 2px solid #e0e0e0; }
+  table.lines td { padding: 8px; border-bottom: 1px solid #e0e0e0; }
+  .amt { text-align: right; }
+  .total-row td { font-weight: 700; border-top: 2px solid #161616; }
+  .words { margin-top: 12px; font-style: italic; }
+  .sigs { display: flex; justify-content: space-between; margin-top: 60px; }
+  .sig { width: 30%; text-align: center; }
+  .sig .line { border-top: 1px solid #161616; padding-top: 6px; color: #6f6f6f; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="biz-name">{{business.business_name}}</div>
+      <div>{{business.address}}</div>
+      <div>{{business.phone}}</div>
+    </div>
+    <div>
+      <div class="doc-title">PAYMENT VOUCHER</div>
+      <div style="text-align:right;">{{voucher.pv_number}}</div>
+    </div>
+  </div>
+
+  <table class="meta">
+    <tr><td class="label">Date</td><td>{{voucher.pv_date}}</td>
+        <td class="label">Status</td><td>{{voucher.status}}</td></tr>
+    <tr><td class="label">Pay To</td><td>{{voucher.payee_name}}</td>
+        <td class="label">Method</td><td>{{voucher.payment_method}}</td></tr>
+    <tr><td class="label">Bank</td><td>{{voucher.payee_bank_name}}</td>
+        <td class="label">Account No.</td><td>{{voucher.payee_bank_account}}</td></tr>
+    <tr><td class="label">Reference</td><td>{{voucher.payment_reference}}</td>
+        <td class="label">TIN</td><td>{{voucher.payee_tin}}</td></tr>
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr><th>Service Item</th><th class="amt">Amount ({{voucher.currency}})</th></tr>
+    </thead>
+    <tbody>
+      <!-- PV line rows rendered dynamically -->
+    </tbody>
+    <tfoot>
+      <tr class="total-row"><td class="amt">Total</td><td class="amt">{{voucher.total_display}}</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="words">Ringgit Malaysia: {{voucher.amount_in_words}}</div>
+
+  <div class="sigs">
+    <div class="sig"><div class="line">Prepared by</div></div>
+    <div class="sig"><div class="line">Approved by</div></div>
+    <div class="sig"><div class="line">Received by</div></div>
+  </div>
+</body>
+</html>

@@ -56,6 +56,7 @@ export default function AppShell({ children }) {
     { label: 'Quotations', path: '/quotations', icon: Document },
     { label: 'Credit Notes', path: '/credit-notes', icon: DocumentMultiple_01 },
     { label: 'Expenses', path: '/expenses', icon: Currency },
+    { label: 'Payment Vouchers', path: '/payment-vouchers', icon: Notebook },
     { label: 'Taxation', path: '/taxation', icon: DocumentMultiple_01 },
     { label: 'Cash Flow', path: '/cash-flow', icon: ChartLine },
     { label: 'Bank Recon', path: '/bank-reconciliation', icon: PiggyBank },

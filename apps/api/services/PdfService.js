@@ -65,6 +65,43 @@ function renderItemsHtml(items, currency) {
   }).join('\n');
 }
 
+function numberToWords(amount) {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  function under1000(n) {
+    let s = '';
+    if (n >= 100) { s += ones[Math.floor(n / 100)] + ' Hundred'; n %= 100; if (n) s += ' '; }
+    if (n >= 20) { s += tens[Math.floor(n / 10)]; n %= 10; if (n) s += '-' + ones[n]; }
+    else if (n > 0) { s += ones[n]; }
+    return s;
+  }
+
+  const num = Math.floor(Math.abs(Number(amount) || 0));
+  const cents = Math.round((Math.abs(Number(amount) || 0) - num) * 100);
+
+  let words = '';
+  if (num === 0) {
+    words = 'Zero';
+  } else {
+    const scales = [['Million', 1000000], ['Thousand', 1000]];
+    let remaining = num;
+    for (const [name, value] of scales) {
+      if (remaining >= value) {
+        words += under1000(Math.floor(remaining / value)) + ' ' + name + ' ';
+        remaining %= value;
+      }
+    }
+    if (remaining > 0) words += under1000(remaining);
+  }
+
+  words = words.trim();
+  let result = words;
+  if (cents > 0) result += ` and Cents ${under1000(cents)}`;
+  return `${result} Only`;
+}
+
 class PdfService {
   async generateInvoicePdf(invoice, business) {
     let html = renderTemplate('invoice.html', { invoice, business });
@@ -93,6 +130,31 @@ class PdfService {
     html = html.replace('<!-- Items rendered dynamically via JS or template engine -->', itemsHtml);
     return htmlToPdf(html);
   }
+  async generatePaymentVoucherPdf(voucher, business) {
+    const currency = voucher.currency || 'MYR';
+    const total = Number(voucher.total_amount || 0);
+    const data = {
+      voucher: {
+        ...voucher,
+        total_display: `${currency} ${total.toFixed(2)}`,
+        amount_in_words: numberToWords(total),
+      },
+      business: business || {},
+    };
+    let html = renderTemplate('payment-voucher.html', data);
+
+    const linesHtml = (voucher.lines || []).map(l => {
+      const item = String(l.service_item || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<tr>
+        <td>${item}</td>
+        <td class="amt">${currency} ${Number(l.amount || 0).toFixed(2)}</td>
+      </tr>`;
+    }).join('\n');
+    html = html.replace('<!-- PV line rows rendered dynamically -->', linesHtml);
+
+    return htmlToPdf(html);
+  }
+
   async generateProfitLossPdf(report, business) {
     const fmt = (n) => `RM ${Number(n || 0).toFixed(2)}`;
 
