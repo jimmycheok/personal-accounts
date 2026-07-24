@@ -44,6 +44,12 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Year-end closing automation: closes revenue/expense accounts to Retained Earnings, transfers Owner's Drawings to Capital
 - Manual journal entries for adjustments not covered by standard transactions
 
+### Payment Vouchers (v2.3)
+- Record outgoing payments (e.g. freelancer salaries) as formal, numbered payment vouchers (`PV-YYYYMM-NNNN`)
+- Create from a modal with a free-text **service-item** table (item + amount) and staged file attachments
+- On save, the GL Review modal posts a balanced journal entry immediately — defaulting to DR Salaries & Wages (`6100`) / CR the payment-method account (Bank `1010` or Cash `1000`) — and the voucher is marked posted
+- Void reverses the journal entry; printable PDF voucher with amount-in-words and Prepared/Approved/Received signature lines
+
 ### Dashboard & Reporting
 - Financial overview: revenue, expenses, net profit, and outstanding balance — filterable by month, quarter, or year
 - Upcoming deadlines: overdue invoices, due-soon invoices, and annual Borang B filing reminder (30 April)
@@ -87,17 +93,17 @@ personal-accountant/
 │   │   ├── controllers/      # Request handlers
 │   │   ├── jobs/             # Agenda scheduled jobs
 │   │   ├── middlewares/      # JWT auth, error handler, audit log
-│   │   ├── migrations/       # Sequelize migrations (24 tables)
-│   │   ├── models/           # Sequelize models (25 including Account, JournalEntry, JournalEntryLine)
-│   │   ├── routes/           # Route definitions (21 route files)
+│   │   ├── migrations/       # Sequelize migrations (26 tables)
+│   │   ├── models/           # Sequelize models (incl. Account, JournalEntry, JournalEntryLine, PaymentVoucher, PaymentVoucherLine)
+│   │   ├── routes/           # Route definitions (22 route files)
 │   │   ├── schemas/          # Zod validation schemas
 │   │   ├── seeders/          # Expense category seed data
 │   │   ├── services/         # Business logic (MyInvois, OCR, PDF, tax, GL, reports, AI accounting)
-│   │   └── templates/        # HTML templates for Gotenberg PDF (invoice, P&L, balance sheet)
+│   │   └── templates/        # HTML templates for Gotenberg PDF (invoice, P&L, balance sheet, payment voucher, tax summary)
 │   │
 │   └── web/                  # React frontend (port 5173)
 │       └── src/
-│           ├── components/   # AppShell, GLReviewModal, AddExpenseModal, PaymentModal, ConfirmModal, AttachmentsPanel, OCRAssistantModal, CustomerQuickCreateModal
+│           ├── components/   # AppShell, GLReviewModal, AddExpenseModal, PaymentVoucherModal, PaymentModal, ConfirmModal, AttachmentsPanel, OCRAssistantModal, CustomerQuickCreateModal
 │           ├── context/      # AuthContext, AppSettingsContext
 │           ├── pages/        # One folder per route
 │           └── services/     # Axios API client with JWT interceptor
@@ -133,6 +139,8 @@ personal-accountant/
 | `/credit-notes` | Credit note issuance and LHDN submission |
 | `/credit-notes/:id` | Credit note detail with status actions and file attachments |
 | `/expenses` | Expense list with view modal and inline attachment support; AI receipt scan via header |
+| `/payment-vouchers` | Payment voucher list; "New Payment Voucher" opens a modal (service items + GL posting on save) |
+| `/payment-vouchers/:id` | Voucher detail with service items, linked GL entry, PDF download, void, and attachments |
 | `/taxation` | Borang B summary, relief inputs, tax estimate, PDF export |
 | `/cash-flow` | Projected vs actual cash flow line chart |
 | `/bank-reconciliation` | CSV import and transaction matching |
@@ -217,6 +225,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.3](docs/releases/v2.3.md) | 2026-07-24 | Payment Voucher module — modal create, service-item lines, GL posting on save, printable PDF |
 | [v2.2](docs/releases/v2.2.md) | 2026-03-30 | Document preview modal, PDF/image-only upload constraint, mileage rounding fix |
 | [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage, fix mileage deduction rate to match LHDN tiered schedule |
 | [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |

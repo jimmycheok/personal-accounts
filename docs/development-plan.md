@@ -426,6 +426,18 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 
 ---
 
+## Specification Corrections (discovered during v2.3 dev)
+
+### Payment Voucher module
+- New tables `payment_vouchers` and `payment_voucher_lines`. Voucher lines carry a free-text `service_item` + `amount` only — there is **no** per-line GL account (the GL account is chosen once in the GL modal, defaulting to `6100`).
+- New routes under `/api/v1/payment-vouchers` (all behind `verifyJwt`): `GET /`, `POST /`, `GET /:id`, `GET /:id/pdf`, `PUT /:id`, `POST /:id/void`, `DELETE /:id`.
+- **GL posts on create, not on a separate approve step** (mirrors the Expense flow): `POST /payment-vouchers` with a balanced `journal_lines` array posts the entry immediately via `JournalEntryService.createAutoEntry` (`source_type='payment_voucher'`), assigns `PV-YYYYMM-NNNN`, and sets status `approved`. `POST /:id/void` reverses the entry (`deleteAutoEntriesForSource`) and sets status `voided`.
+- `GLReviewModal` gained a `payment_voucher_create` template (DR `6100` Salaries & Wages / CR `1010` Bank, switching to `1000` Cash for cash payments) and now accepts a caller-supplied `initialLines` prop.
+- Server-controlled fields (`status`, `pv_number`, `approved_at`, `total_amount`) are stripped from PV write bodies so a client cannot set them directly.
+- `PdfService.generatePaymentVoucherPdf` + `numberToWords` helper render a printable voucher (Service Item + Amount, amount-in-words, signature lines) via Gotenberg.
+
+---
+
 ## Release Log
 
 ### v1.3 — Code Quality, Shared Tax Constants & Minor Fixes (2026-03-18)
