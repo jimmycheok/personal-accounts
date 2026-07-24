@@ -9,6 +9,7 @@ import api from '../../services/api.js';
 import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
 
 const STATUS_TAG = { draft: 'gray', approved: 'green', voided: 'red' };
+const titleCase = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function PaymentVoucherDetail() {
   const { id } = useParams();
@@ -42,7 +43,7 @@ export default function PaymentVoucherDetail() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 400 }}>{voucher.pv_number || 'Payment Voucher'}</h1>
-          <Tag type={STATUS_TAG[voucher.status] || 'gray'}>{voucher.status}</Tag>
+          <Tag type={STATUS_TAG[voucher.status] || 'gray'}>{titleCase(voucher.status)}</Tag>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {voucher.status === 'approved' && <Button kind="secondary" renderIcon={DocumentIcon} onClick={openPdf}>PDF</Button>}
@@ -55,7 +56,7 @@ export default function PaymentVoucherDetail() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem', background: '#fff', padding: '1.5rem', border: '1px solid #e0e0e0' }}>
         {field('Date', voucher.pv_date)}
         {field('Payee', voucher.payee_name)}
-        {field('Method', voucher.payment_method)}
+        {field('Method', titleCase(voucher.payment_method))}
         {field('Reference', voucher.payment_reference)}
         {field('Bank', voucher.payee_bank_name)}
         {field('Bank Account', voucher.payee_bank_account)}

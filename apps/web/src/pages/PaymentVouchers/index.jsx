@@ -10,6 +10,7 @@ import api from '../../services/api.js';
 import PaymentVoucherModal from '../../components/PaymentVoucherModal.jsx';
 
 const STATUS_TAG = { draft: 'gray', approved: 'green', voided: 'red' };
+const titleCase = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function PaymentVouchersPage() {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ export default function PaymentVouchersPage() {
     pv_date: v.pv_date,
     payee_name: v.payee_name,
     total_amount: `RM ${Number(v.total_amount || 0).toFixed(2)}`,
-    payment_method: v.payment_method,
+    payment_method: titleCase(v.payment_method),
     status: v.status,
   }));
 
@@ -88,7 +89,7 @@ export default function PaymentVouchersPage() {
                     <TableRow key={row.id} onClick={() => navigate(`/payment-vouchers/${row.id}`)} style={{ cursor: 'pointer' }}>
                       {row.cells.map(cell => {
                         if (cell.info.header === 'status') {
-                          return <TableCell key={cell.id}><Tag type={STATUS_TAG[v.status] || 'gray'}>{v.status}</Tag></TableCell>;
+                          return <TableCell key={cell.id}><Tag type={STATUS_TAG[v.status] || 'gray'}>{titleCase(v.status)}</Tag></TableCell>;
                         }
                         if (cell.info.header === 'actions') {
                           return (
