@@ -65,6 +65,7 @@
 import { config as loadEnv } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { classifyPayment } from '../services/paymentClassification.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(__dirname, '../../../.env') });
@@ -100,17 +101,10 @@ async function orphanPaymentEntryCount() {
   return rows[0].count;
 }
 
-// Classifies every payment into one of three buckets:
-//   - missing:    no journal_entries row matches source_type='payment' AND
-//                 source_id=payment.id at all. Safe to auto-repair.
-//   - ambiguous:  a row DOES match on (source_type, source_id), but its
-//                 description does not mention the payment's own invoice
-//                 number — i.e. the match is source_id collateral damage
-//                 from an unrelated invoice's markPaid entry (see the file
-//                 header). Never auto-repaired; surfaced for manual review.
-//   - covered:    a row matches AND its description mentions the payment's
-//                 own invoice number — genuinely already posted. Skipped
-//                 silently, same as before.
+// Classifies every payment into one of three buckets — missing / ambiguous /
+// covered — via the pure `classifyPayment` (see services/paymentClassification.js
+// for the full rationale and unit tests). This function's only job is to
+// fetch the SQL rows that function needs and bucket the results.
 async function classifyPayments() {
   const [rows] = await sequelize.query(`
     SELECT p.id AS payment_id, p.amount, p.invoice_id, inv.invoice_number,
@@ -122,27 +116,35 @@ async function classifyPayments() {
     ORDER BY p.id
   `);
 
+  const [orphanRows] = await sequelize.query(`
+    SELECT id, description FROM journal_entries
+    WHERE source_type = 'payment' AND source_id IS NULL
+  `);
+
   const missing = [];
   const ambiguous = [];
 
   for (const row of rows) {
-    if (row.entry_id == null) {
+    const result = classifyPayment({
+      invoiceNumber: row.invoice_number,
+      matchedEntry: row.entry_id == null ? null : { id: row.entry_id, description: row.entry_description },
+      orphanEntries: orphanRows,
+    });
+
+    if (result.status === 'missing') {
       missing.push(row.payment_id);
-      continue;
-    }
-    const description = row.entry_description || '';
-    const coveredByOwnInvoice = row.invoice_number && description.includes(row.invoice_number);
-    if (!coveredByOwnInvoice) {
+    } else if (result.status === 'ambiguous') {
       ambiguous.push({
         paymentId: row.payment_id,
         amount: row.amount,
         invoiceId: row.invoice_id,
         invoiceNumber: row.invoice_number,
-        entryId: row.entry_id,
-        entryDescription: row.entry_description,
+        entryId: result.entryId,
+        entryDescription: result.entryDescription,
+        reason: result.reason,
       });
     }
-    // else: description mentions this payment's own invoice — genuinely covered.
+    // else 'covered': skipped silently, same as before.
   }
 
   return { missing, ambiguous };
@@ -154,6 +156,7 @@ function formatAmbiguous(a) {
   const lines = [
     `  payment id=${a.paymentId} (RM${amount}, ${invoiceLabel})`,
     `    matched journal entry ${a.entryId}, described "${a.entryDescription}"`,
+    `    reason: ${a.reason || 'unspecified'}`,
     `    -> NOT auto-repaired; review manually`,
   ];
   return lines.join('\n');
