@@ -8,3 +8,6 @@ uploads/
 .turbo/
 .cache/
 coverage/
+
+# session-local docker port overrides (not for commit)
+docker-compose.override.yml
