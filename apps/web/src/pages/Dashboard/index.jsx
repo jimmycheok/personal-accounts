@@ -59,9 +59,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid-4" style={{ marginBottom: '2rem' }}>
-        <StatCard label="Revenue" value={overview?.totalIncome} color="#0e6027" />
-        <StatCard label="Expenses" value={overview?.totalExpenses} color="#da1e28" />
-        <StatCard label="Net Profit" value={overview?.netProfit} color="#0f62fe" />
+        <StatCard label="Cash In" value={overview?.totalIncome} color="#0e6027" />
+        <StatCard label="Cash Out" value={overview?.totalExpenses} color="#da1e28" />
+        <StatCard label="Net Cash" value={overview?.netProfit} color="#0f62fe" />
         <StatCard label="Outstanding" value={overview?.totalOutstanding} color="#f1620e" />
       </div>
 
