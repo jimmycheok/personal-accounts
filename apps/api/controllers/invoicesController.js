@@ -156,7 +156,17 @@ export async function send(req, res, next) {
         await JournalEntryService.onInvoiceSent(invoice);
       }
     } catch (err) {
-      await invoice.update(prev);
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await invoice.update(prev);
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for invoice ${invoice.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
       throw err;
     }
     await writeAuditLog({ action: 'send', subjectType: 'Invoice', subjectId: invoice.id });
@@ -197,7 +207,17 @@ export async function markPaid(req, res, next) {
         );
       }
     } catch (err) {
-      await invoice.update(prev);
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await invoice.update(prev);
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for invoice ${invoice.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
       throw err;
     }
     await writeAuditLog({ action: 'mark_paid', subjectType: 'Invoice', subjectId: invoice.id });

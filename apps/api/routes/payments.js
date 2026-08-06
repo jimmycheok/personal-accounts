@@ -58,7 +58,17 @@ router.post('/', async (req, res, next) => {
         await JournalEntryService.onPaymentReceived(payment, invoice);
       }
     } catch (err) {
-      await payment.destroy();
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await payment.destroy();
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for payment ${payment.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
       throw err;
     }
 

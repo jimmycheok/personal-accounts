@@ -66,7 +66,17 @@ export async function create(req, res, next) {
         );
       }
     } catch (err) {
-      await expense.destroy();   // never leave a record without an entry
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await expense.destroy();
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for expense ${expense.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
       throw err;
     }
     await writeAuditLog({ action: 'create', subjectType: 'Expense', subjectId: expense.id });
