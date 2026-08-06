@@ -196,6 +196,22 @@ class JournalEntryService {
     });
   }
 
+  async onMileageLogged(log) {
+    const amount = parseFloat(log.deductible_amount);
+    if (amount <= 0) return;
+
+    await this.createAutoEntry({
+      entryDate: log.log_date,
+      description: `Mileage: ${log.from_location || ''} → ${log.to_location || ''} (${log.km} km)`,
+      lines: [
+        { accountCode: '6400', debit: amount, credit: 0, description: 'Motor vehicle expense (mileage)' },
+        { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
+      ],
+      sourceType: 'mileage',
+      sourceId: log.id,
+    });
+  }
+
   async onCreditNoteSubmitted(creditNote) {
     const amount = parseFloat(creditNote.amount);
     if (amount <= 0) return;

@@ -57,8 +57,12 @@ class TaxCalculator {
     const { sectionTotals } = await this.getExpensesBySection(year);
     const { totalKm, deductibleAmount: mileageDeduction } = await this.getMileageDeduction(year);
 
-    // Add mileage to D5 (motor vehicle)
-    sectionTotals['D5'] = (sectionTotals['D5'] || 0) + mileageDeduction;
+    // The GL is authoritative: mileage logs post their own journal entry
+    // (debit 6400 Motor Vehicle Expenses, which carries borang_b_section
+    // 'D5'), so getExpensesBySection already includes mileage. Adding
+    // mileageDeduction here would double-count it under a different rate.
+    // `mileage` below is reported for display only — it is NOT added into
+    // sectionTotals.
 
     const totalExpenses = Object.values(sectionTotals).reduce((sum, v) => sum + v, 0);
     const grossProfit = totalIncome - totalExpenses;
