@@ -6,6 +6,7 @@ import {
   applyCashRows,
   finaliseMonths,
   applySectionRules,
+  ymd,
 } from '../services/ledgerAggregation.js';
 import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping';
 
@@ -96,4 +97,17 @@ test('applySectionRules takes the D15 rate from the shared constants', () => {
   // Proves the rate is read, not hardcoded: it must match the shared source.
   assert.equal(BORANG_B_SECTIONS.D15.deductibilityRate, 0.5);
   assert.equal(applySectionRules([{ section: 'D15', amount: '1000' }]).D15, 500);
+});
+
+test('ymd zero-pads single-digit months and days', () => {
+  assert.equal(ymd(new Date(2026, 0, 1)), '2026-01-01');
+  assert.equal(ymd(new Date(2026, 8, 5)), '2026-09-05');
+});
+
+test('ymd does not shift the date across the UTC boundary (regression)', () => {
+  // Regression coverage for the timezone bug: .toISOString().split('T')[0]
+  // converts to UTC first, which on hosts east of UTC (e.g. +08) shifts a
+  // locally-constructed calendar date back by one day. ymd() must not do that.
+  assert.equal(ymd(new Date(2026, 7, 1)), '2026-08-01');
+  assert.equal(ymd(new Date(2026, 8, 0)), '2026-08-31');
 });

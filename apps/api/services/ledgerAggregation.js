@@ -10,6 +10,10 @@ export const CASH_ACCOUNT_CODES = ['1000', '1010'];
 // Accumulation stays full-precision; only the returned value is rounded.
 const toCents = (n) => Math.round(n * 100) / 100;
 
+// Local calendar date, NOT `.toISOString()` — that converts to UTC first and
+// shifts the month boundary back a day on any host east of UTC.
+export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 export function buildMonthBuckets(from, to) {

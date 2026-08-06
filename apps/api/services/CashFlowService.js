@@ -1,10 +1,7 @@
 import { Op } from 'sequelize';
 import { Invoice, RecurringTemplate, CashFlowProjection } from '../models/index.js';
 import LedgerQueryService from './LedgerQueryService.js';
-
-// Local calendar date, NOT `.toISOString()` — that converts to UTC first and
-// shifts the month boundary back a day on any host east of UTC.
-const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+import { ymd } from './ledgerAggregation.js';
 
 class CashFlowService {
   async getProjection(months = 6) {
