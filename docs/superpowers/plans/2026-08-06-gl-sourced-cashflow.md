@@ -1041,3 +1041,35 @@ git commit -m "feat(web): explain the Expenses vs Payment Vouchers distinction o
 4. Deploy the API, then confirm dashboard and cash flow agree for the current year.
 
 The backfill writes to production accounting data. It must be dry-run first and the counts reviewed by Jimmy before `--apply`.
+
+---
+
+## Amendment A — Task 3 review findings (ruled by Jimmy, 2026-08-06)
+
+Task 3's review raised three Important findings. Rulings:
+
+1. **`markPaid` stored `source_id = NULL`.** The synthetic payment object passed to
+   `onPaymentReceived` had no `id`, so `sourceId: payment.id` resolved to undefined.
+   Confirmed live (`JE-202608-0006`). Consequences: `deleteAutoEntriesForSource` can
+   never find the entry, and Task 4's backfill would post a duplicate.
+   **Ruling: fix** — pass `id: invoice.id`, matching what the `if` branch already stores.
+
+2. **`payments.js:38` writes `payment_method:` but the `Payment` model attribute is
+   `method`** (`models/Payment.js:11`). Sequelize silently drops the unknown key, so
+   `method` is always the default `'bank_transfer'`. Harmless while `onPaymentReceived`
+   was dead code; after Task 3 wired it up, every cash payment posts to `1010` Bank
+   instead of `1000` Cash. **Ruling: fix** — write `method:` and keep the destructured
+   `payment_method` request field as the client-facing name.
+
+3. **No atomicity between the source write and the GL post.** The source record commits
+   first; if the GL post throws, the orphan record this task exists to prevent is created.
+   **Ruling: compensating rollback**, not a threaded transaction — `JournalEntryService`
+   is shared with the Payment Voucher flow, which already works, and changing its
+   signature risks regressing it.
+
+Compensating rollback per site:
+- `expensesController.create` — on GL failure, `await expense.destroy()`, then rethrow.
+- `payments.js` POST — move the invoice recalculation to **after** a successful GL post,
+  so compensation is just `await payment.destroy()`, then rethrow.
+- `invoicesController.send` / `markPaid` — capture the prior field values before
+  `invoice.update(...)`, restore them on GL failure, then rethrow.
