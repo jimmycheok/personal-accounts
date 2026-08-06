@@ -21,7 +21,7 @@ class LedgerQueryService {
        WHERE je.status = 'posted'
          AND je.entry_date BETWEEN :from AND :to
          AND a.code IN (:cashCodes)
-         AND je.source_type != 'year_end_close'
+         AND je.source_type IS DISTINCT FROM 'year_end_close'
        GROUP BY 1`,
       { replacements: { from, to, cashCodes: CASH_ACCOUNT_CODES } },
     );
@@ -55,7 +55,7 @@ class LedgerQueryService {
          AND a.account_type = 'expense'
          AND a.borang_b_section IS NOT NULL
          AND je.entry_date BETWEEN :from AND :to
-         AND je.source_type != 'year_end_close'
+         AND je.source_type IS DISTINCT FROM 'year_end_close'
        GROUP BY 1`,
       { replacements: { from, to } },
     );
@@ -80,7 +80,7 @@ class LedgerQueryService {
        WHERE je.status = 'posted'
          AND a.account_type = 'revenue'
          AND je.entry_date BETWEEN :from AND :to
-         AND je.source_type != 'year_end_close'`,
+         AND je.source_type IS DISTINCT FROM 'year_end_close'`,
       { replacements: { from, to } },
     );
     return Math.round(parseFloat(rows[0]?.amount || 0) * 100) / 100;
