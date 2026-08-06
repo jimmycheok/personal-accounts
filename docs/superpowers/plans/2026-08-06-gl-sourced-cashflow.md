@@ -1035,12 +1035,86 @@ git commit -m "feat(web): explain the Expenses vs Payment Vouchers distinction o
 
 ## Production rollout (do NOT run without Jimmy's explicit go-ahead)
 
-1. Seed the new account: `npx sequelize-cli db:seed --seed 20260806000001-non-deductible-account.cjs`
-2. Dry-run the backfill and read the counts: `node scripts/backfill-journal-entries.js`
-3. Only if the counts look right, apply: `node scripts/backfill-journal-entries.js --apply`
-4. Deploy the API, then confirm dashboard and cash flow agree for the current year.
+> **Amended 2026-08-06 (final whole-branch review, Fix 11).** The original
+> order ran the backfill before deploying the new API. That leaves the old,
+> pre-GL API live and creating new expenses/payments/invoices with no journal
+> entry *while the backfill is running*, opening a fresh gap immediately
+> behind the one just closed — never closed, because nothing re-runs the
+> backfill after deploy. The daily 06:00 `generate-recurring-entries` job
+> makes this concrete: any recurring expense that fires between the backfill
+> and the deploy is invisible to cash flow, dashboard and tax, forever. This
+> revision deploys the API first.
 
-The backfill writes to production accounting data. It must be dry-run first and the counts reviewed by Jimmy before `--apply`.
+1. **Seed the non-deductible account (hard prerequisite, must be first,
+   before either the API deploy or the backfill).** Every non-deductible
+   expense posted after this point calls `getAccountByCode('6995')`, which
+   throws if the account doesn't exist yet — this would break the *new* API
+   too, not just the backfill.
+   ```bash
+   npx sequelize-cli db:seed --seed 20260806000001-non-deductible-account.cjs
+   ```
+
+2. **Back up the database.** Nothing past this point has an undo. The
+   backfill and, more importantly, ordinary GL posting from this point
+   onward, write to live accounting books.
+   ```bash
+   pg_dump -U pa_user -d personal_accountant -F c -f backup-pre-gl-rollout-$(date +%Y%m%d%H%M).dump
+   ```
+   Confirm the dump file is non-empty and restorable (or at least that
+   `pg_restore --list` on it succeeds) before continuing.
+
+3. **Deploy the API.** From this point every new expense, payment, invoice
+   send/markPaid, mileage log and recurring-entries run posts its own
+   journal entry unconditionally (Task 3 / this review's Fix 2–4). No new
+   gap can open behind the backfill.
+
+4. **Dry-run the backfill and read the counts:**
+   ```bash
+   node scripts/backfill-journal-entries.js
+   ```
+
+5. **Hard gate — do not run `--apply` unless BOTH of the following are
+   zero:**
+   - `Payments AMBIGUOUS (need review)`
+   - `Orphan payment entries (source_id IS NULL, unreconcilable)`
+
+   Both counts represent money whose correct treatment the script cannot
+   determine safely (see Amendment B and this review's Fix 7) — running
+   `--apply` while either is non-zero does not touch those rows, but it
+   means the rollout is proceeding with a known, unresolved discrepancy in
+   the books. **If either count is non-zero:** stop, review every listed
+   AMBIGUOUS payment and orphan entry manually against the source
+   `payments`/`invoices`/`journal_entries` rows, resolve each one by hand
+   (a manual correcting journal entry, or linking the orphan's `source_id`),
+   re-run the dry run, and do not proceed to `--apply` until both counts
+   read zero.
+
+6. **One operator, one run.** The script has no inter-process lock (see its
+   file header). Confirm no one else is running it — concurrently, or against
+   the same database from a second machine — before `--apply`. Running two
+   `--apply` invocations at once can both read the same "missing" set before
+   either writes, double-posting entries.
+
+7. **Apply:**
+   ```bash
+   node scripts/backfill-journal-entries.js --apply
+   ```
+
+8. **Post-deploy verification:**
+   - Confirm `/dashboard/overview?period=year` and `/cash-flow/actual` agree
+     for the current year (same `totalIncome`/`totalExpenses`).
+   - Re-run the dry run once more and confirm `Expenses without a GL entry`
+     and `Payments with no GL entry` both read 0.
+   - **Borang B verification (added — this carries both of the final
+     review's Critical findings and was previously unverified by this
+     procedure):** pull `/taxation/borang-b?year=<current year>` and confirm
+     Part D section totals are non-zero if expenses exist for the year (a
+     year-end close must not zero them — Fix 1), and that `partB.grossIncome`
+     is the accrual (GL revenue) figure, not the old cash-received figure —
+     compare against `/taxation/income-summary?year=<current year>` and
+     confirm they now legitimately differ (accrual vs cash-basis is an
+     intentional, Jimmy-approved change — see Fix 9), not by an amount that
+     suggests a bug.
 
 ---
 
