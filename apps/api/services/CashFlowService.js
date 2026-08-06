@@ -2,6 +2,10 @@ import { Op } from 'sequelize';
 import { Invoice, RecurringTemplate, CashFlowProjection } from '../models/index.js';
 import LedgerQueryService from './LedgerQueryService.js';
 
+// Local calendar date, NOT `.toISOString()` — that converts to UTC first and
+// shifts the month boundary back a day on any host east of UTC.
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 class CashFlowService {
   async getProjection(months = 6) {
     const today = new Date();
@@ -22,7 +26,7 @@ class CashFlowService {
       const outstanding = await Invoice.findAll({
         where: {
           status: { [Op.in]: ['sent', 'overdue'] },
-          due_date: { [Op.between]: [monthStart.toISOString().split('T')[0], monthEnd.toISOString().split('T')[0]] },
+          due_date: { [Op.between]: [ymd(monthStart), ymd(monthEnd)] },
         },
         attributes: ['amount_due'],
       });
@@ -48,8 +52,8 @@ class CashFlowService {
       // Actual data for past months
       if (monthEnd < today) {
         const totals = await LedgerQueryService.getCashTotals(
-          monthStart.toISOString().split('T')[0],
-          monthEnd.toISOString().split('T')[0],
+          ymd(monthStart),
+          ymd(monthEnd),
         );
         actualIncome = totals.income;
         actualExpenses = totals.expenses;
