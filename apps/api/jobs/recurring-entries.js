@@ -1,6 +1,7 @@
-import { RecurringTemplate, Invoice, InvoiceItem, Expense, BusinessProfile } from '../models/index.js';
+import { RecurringTemplate, Invoice, InvoiceItem, Expense, ExpenseCategory, BusinessProfile } from '../models/index.js';
 import { Op } from 'sequelize';
 import { addDays, addWeeks, addMonths, addQuarters, addYears, format, parseISO } from 'date-fns';
+import JournalEntryService from '../services/JournalEntryService.js';
 
 function getNextDate(frequency, fromDate) {
   const date = typeof fromDate === 'string' ? parseISO(fromDate) : fromDate;
@@ -59,7 +60,7 @@ export function defineRecurringEntriesJob(agenda) {
           }
         } else if (template.template_type === 'expense') {
           const data = template.template_data;
-          await Expense.create({
+          const expense = await Expense.create({
             vendor_name: data.vendor_name,
             description: data.description,
             amount: data.amount,
@@ -72,6 +73,27 @@ export function defineRecurringEntriesJob(agenda) {
             is_recurring: true,
             recurring_template_id: template.id,
           });
+
+          // The GL is the source of truth for cash flow, dashboard and tax,
+          // so a recurring expense must never exist without an entry. If the
+          // GL post fails, the expense must not survive either —
+          // compensate by destroying it so we never leave a record without
+          // a matching journal entry.
+          try {
+            await JournalEntryService.onExpenseCreated(
+              await expense.reload({ include: [{ model: ExpenseCategory, as: 'category' }] }),
+            );
+          } catch (err) {
+            try {
+              await expense.destroy();
+            } catch (cleanupErr) {
+              console.error(
+                `GL rollback failed for recurring expense ${expense.id} — record may have no journal entry:`,
+                cleanupErr.message,
+              );
+            }
+            throw err;
+          }
         }
 
         // Advance next_run_date
