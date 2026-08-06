@@ -35,12 +35,34 @@ router.post('/', async (req, res, next) => {
       invoice_id: invoice.id,
       amount: parseFloat(amount),
       payment_date: payment_date || new Date().toISOString().split('T')[0],
-      payment_method: payment_method || 'bank_transfer',
+      method: payment_method || 'bank_transfer',
       reference,
       notes,
     });
 
-    // Recalculate invoice amounts paid / due
+    // The GL is the source of truth for cash flow, dashboard and tax, so a
+    // payment must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them. If the GL post fails, the
+    // payment must not survive either — compensate by destroying it before
+    // the invoice is ever recalculated off of it.
+    try {
+      if (req.body.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: payment.payment_date,
+          description: `Payment received for ${invoice.invoice_number}`,
+          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'payment',
+          sourceId: payment.id,
+        });
+      } else {
+        await JournalEntryService.onPaymentReceived(payment, invoice);
+      }
+    } catch (err) {
+      await payment.destroy();
+      throw err;
+    }
+
+    // Recalculate invoice amounts paid / due — only after a successful GL post
     const allPayments = await Payment.findAll({ where: { invoice_id: invoice.id } });
     const totalPaid = allPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
     const amountDue = Math.max(0, parseFloat(invoice.total) - totalPaid);
@@ -52,20 +74,6 @@ router.post('/', async (req, res, next) => {
       paid_at: newStatus === 'paid' ? new Date() : invoice.paid_at,
     });
 
-    // The GL is the source of truth for cash flow, dashboard and tax, so a
-    // payment must never exist without an entry. Use the client's reviewed
-    // lines when present, otherwise derive them.
-    if (req.body.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: payment.payment_date,
-        description: `Payment received for ${invoice.invoice_number}`,
-        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'payment',
-        sourceId: payment.id,
-      });
-    } else {
-      await JournalEntryService.onPaymentReceived(payment, invoice);
-    }
     res.status(201).json({ payment, invoice: await invoice.reload() });
   } catch (err) { next(err); }
 });

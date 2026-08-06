@@ -137,20 +137,27 @@ export async function send(req, res, next) {
   try {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const prev = { status: invoice.status, sent_at: invoice.sent_at };
     await invoice.update({ status: 'sent', sent_at: new Date() });
     // The GL is the source of truth for cash flow, dashboard and tax, so an
     // invoice must never exist without an entry. Use the client's reviewed
-    // lines when present, otherwise derive them.
-    if (req.body.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: invoice.issue_date,
-        description: `Invoice ${invoice.invoice_number} issued`,
-        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'invoice',
-        sourceId: invoice.id,
-      });
-    } else {
-      await JournalEntryService.onInvoiceSent(invoice);
+    // lines when present, otherwise derive them. If the GL post fails, undo
+    // the status change so we never leave a "sent" invoice without an entry.
+    try {
+      if (req.body.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: invoice.issue_date,
+          description: `Invoice ${invoice.invoice_number} issued`,
+          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'invoice',
+          sourceId: invoice.id,
+        });
+      } else {
+        await JournalEntryService.onInvoiceSent(invoice);
+      }
+    } catch (err) {
+      await invoice.update(prev);
+      throw err;
     }
     await writeAuditLog({ action: 'send', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
@@ -163,23 +170,35 @@ export async function markPaid(req, res, next) {
   try {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const prev = {
+      status: invoice.status,
+      paid_at: invoice.paid_at,
+      amount_paid: invoice.amount_paid,
+      amount_due: invoice.amount_due,
+    };
     await invoice.update({ status: 'paid', paid_at: new Date(), amount_paid: invoice.total, amount_due: 0 });
     // The GL is the source of truth for cash flow, dashboard and tax, so an
     // invoice must never exist without an entry. Use the client's reviewed
-    // lines when present, otherwise derive them.
-    if (req.body.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: new Date().toISOString().split('T')[0],
-        description: `Full payment for ${invoice.invoice_number}`,
-        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'payment',
-        sourceId: invoice.id,
-      });
-    } else {
-      await JournalEntryService.onPaymentReceived(
-        { amount: invoice.total, payment_date: invoice.paid_at || new Date(), method: 'bank_transfer' },
-        invoice,
-      );
+    // lines when present, otherwise derive them. If the GL post fails, undo
+    // the paid status so we never leave a "paid" invoice without an entry.
+    try {
+      if (req.body.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: new Date().toISOString().split('T')[0],
+          description: `Full payment for ${invoice.invoice_number}`,
+          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'payment',
+          sourceId: invoice.id,
+        });
+      } else {
+        await JournalEntryService.onPaymentReceived(
+          { id: invoice.id, amount: invoice.total, payment_date: invoice.paid_at || new Date(), method: 'bank_transfer' },
+          invoice,
+        );
+      }
+    } catch (err) {
+      await invoice.update(prev);
+      throw err;
     }
     await writeAuditLog({ action: 'mark_paid', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);

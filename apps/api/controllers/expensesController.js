@@ -48,19 +48,26 @@ export async function create(req, res, next) {
     const expense = await Expense.create({ ...data, tax_year: year, amount_myr: amountMyr });
     // The GL is the source of truth for cash flow, dashboard and tax, so an
     // expense must never exist without an entry. Use the client's reviewed
-    // lines when present, otherwise derive them.
-    if (data.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: expense.expense_date,
-        description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
-        lines: data.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'expense',
-        sourceId: expense.id,
-      });
-    } else {
-      await JournalEntryService.onExpenseCreated(
-        await expense.reload({ include: [{ association: 'category' }] }),
-      );
+    // lines when present, otherwise derive them. If the GL post fails, the
+    // expense must not survive either — compensate by destroying it so we
+    // never leave a record without a matching journal entry.
+    try {
+      if (data.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: expense.expense_date,
+          description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
+          lines: data.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'expense',
+          sourceId: expense.id,
+        });
+      } else {
+        await JournalEntryService.onExpenseCreated(
+          await expense.reload({ include: [{ association: 'category' }] }),
+        );
+      }
+    } catch (err) {
+      await expense.destroy();   // never leave a record without an entry
+      throw err;
     }
     await writeAuditLog({ action: 'create', subjectType: 'Expense', subjectId: expense.id });
     res.status(201).json(expense);
