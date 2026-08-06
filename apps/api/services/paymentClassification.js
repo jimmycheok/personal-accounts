@@ -20,8 +20,26 @@
  *
  * `classifyPayment` never over-repairs: any doubt resolves to 'ambiguous',
  * which the backfill script never writes under --apply.
+ *
+ * Fix B (final review, 2026-08-06): a voided invoice has its payment-sourced
+ * journal entries deliberately DELETED (JournalEntryService.
+ * deletePaymentEntriesForInvoice / onInvoiceVoided) while the `payments` row
+ * itself is left intact — voiding is a ledger-only reversal, not a data
+ * deletion. Without this check, that payment's LEFT JOIN would come back
+ * with no matched entry and get bucketed as 'missing', so a naive --apply
+ * run would recreate exactly the phantom cash inflow the void fix removed.
+ * A void is not an error needing manual review either, so it is its own
+ * 'void_skip' status — the operator sees a truthful missing count, not an
+ * inflated ambiguous count.
  */
-export function classifyPayment({ invoiceNumber, matchedEntry, orphanEntries = [] }) {
+export function classifyPayment({ invoiceNumber, invoiceStatus, matchedEntry, orphanEntries = [] }) {
+  // Void check comes first and is unconditional: a voided invoice's payment
+  // entries are supposed to be gone. Nothing else below should re-evaluate
+  // that as ambiguous or missing.
+  if (invoiceStatus === 'void') {
+    return { status: 'void_skip' };
+  }
+
   // Check source_id IS NULL orphans FIRST, independently of whether this
   // payment also has a source_id=payment.id match. If an orphan entry
   // already names this payment's invoice, its money is already in the

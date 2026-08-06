@@ -22,6 +22,15 @@
  *    below). A match whose description doesn't mention the payment's own
  *    invoice is reported as AMBIGUOUS and is never auto-repaired.
  *
+ *  - A payment whose invoice has been voided is reported as its own
+ *    "skipped (invoice void)" category, never as missing or ambiguous
+ *    (Fix B, final review, 2026-08-06). Voiding an invoice deliberately
+ *    deletes that invoice's payment-sourced journal entries while leaving
+ *    the `payments` row itself intact — without this check, the next dry
+ *    run would see "no matched entry" and classify it as missing, and
+ *    --apply would recreate exactly the phantom cash inflow the void
+ *    intentionally removed.
+ *
  *  - Orphan entries with source_type='payment' AND source_id IS NULL are
  *    pre-Task-3 markPaid artifacts. They cannot be matched back to any
  *    payment or invoice, and they double-count money already reflected
@@ -107,7 +116,7 @@ async function orphanPaymentEntryCount() {
 // fetch the SQL rows that function needs and bucket the results.
 async function classifyPayments() {
   const [rows] = await sequelize.query(`
-    SELECT p.id AS payment_id, p.amount, p.invoice_id, inv.invoice_number,
+    SELECT p.id AS payment_id, p.amount, p.invoice_id, inv.invoice_number, inv.status AS invoice_status,
            je.id AS entry_id, je.description AS entry_description
     FROM payments p
     LEFT JOIN invoices inv ON inv.id = p.invoice_id
@@ -123,10 +132,12 @@ async function classifyPayments() {
 
   const missing = [];
   const ambiguous = [];
+  const voidSkipped = [];
 
   for (const row of rows) {
     const result = classifyPayment({
       invoiceNumber: row.invoice_number,
+      invoiceStatus: row.invoice_status,
       matchedEntry: row.entry_id == null ? null : { id: row.entry_id, description: row.entry_description },
       orphanEntries: orphanRows,
     });
@@ -143,11 +154,24 @@ async function classifyPayments() {
         entryDescription: result.entryDescription,
         reason: result.reason,
       });
+    } else if (result.status === 'void_skip') {
+      voidSkipped.push({
+        paymentId: row.payment_id,
+        amount: row.amount,
+        invoiceId: row.invoice_id,
+        invoiceNumber: row.invoice_number,
+      });
     }
     // else 'covered': skipped silently, same as before.
   }
 
-  return { missing, ambiguous };
+  return { missing, ambiguous, voidSkipped };
+}
+
+function formatVoidSkipped(v) {
+  const amount = parseFloat(v.amount).toFixed(2);
+  const invoiceLabel = v.invoiceNumber ? `invoice ${v.invoiceId} / ${v.invoiceNumber}` : `invoice ${v.invoiceId}`;
+  return `  payment id=${v.paymentId} (RM${amount}, ${invoiceLabel}, void) -> skipped, not counted as missing`;
 }
 
 function formatAmbiguous(a) {
@@ -164,7 +188,7 @@ function formatAmbiguous(a) {
 
 async function main() {
   const expenseIds = await missingIds('expenses', 'expense');
-  const { missing: paymentMissingIds, ambiguous: paymentAmbiguous } = await classifyPayments();
+  const { missing: paymentMissingIds, ambiguous: paymentAmbiguous, voidSkipped: paymentVoidSkipped } = await classifyPayments();
   const invoiceIds = (await missingIds('invoices', 'invoice')).length;
   const orphanPaymentEntries = await orphanPaymentEntryCount();
 
@@ -172,6 +196,8 @@ async function main() {
   console.log(`Payments with no GL entry: ${paymentMissingIds.length}`);
   console.log(`Payments AMBIGUOUS (need review): ${paymentAmbiguous.length}`);
   paymentAmbiguous.forEach((a) => console.log(formatAmbiguous(a)));
+  console.log(`Payments skipped (invoice void — not counted as missing): ${paymentVoidSkipped.length}`);
+  paymentVoidSkipped.forEach((v) => console.log(formatVoidSkipped(v)));
   console.log(`Invoices without an issue entry: ${invoiceIds} (REPORT ONLY — this script does not repair invoices)`);
   console.log(`Orphan payment entries (source_id IS NULL, unreconcilable): ${orphanPaymentEntries} (REPORT ONLY — not repaired or deleted by this script)`);
 
@@ -179,6 +205,7 @@ async function main() {
     console.log('\nDry run. Re-run with --apply to create the missing expense and payment entries.');
     console.log('Note: invoice and orphan-entry counts above are informational only and are never written by --apply.');
     console.log('Note: AMBIGUOUS payments above are never written by --apply either — they need manual review.');
+    console.log('Note: void-skipped payments are correct as-is — their invoice was voided, which deliberately removes the payment entry — and are never written by --apply.');
     return;
   }
 

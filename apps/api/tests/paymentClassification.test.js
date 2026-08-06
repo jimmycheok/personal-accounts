@@ -68,6 +68,50 @@ test('classifyPayment: no invoice number (orphaned payment row) never matches an
   assert.equal(result.status, 'missing');
 });
 
+test('classifyPayment: invoice void is skipped, not missing, even with no matched entry', () => {
+  // Fix B: voiding an invoice deliberately deletes its payment-sourced
+  // entries, leaving the payments row intact. Without the void check this
+  // would look exactly like a genuinely missing entry and get auto-repaired
+  // by --apply, recreating the phantom inflow the void removed.
+  const result = classifyPayment({
+    invoiceNumber: 'INV-0002',
+    invoiceStatus: 'void',
+    matchedEntry: null,
+    orphanEntries: [],
+  });
+  assert.equal(result.status, 'void_skip');
+});
+
+test('classifyPayment: invoice void wins even when a matched entry still exists', () => {
+  const result = classifyPayment({
+    invoiceNumber: 'INV-0002',
+    invoiceStatus: 'void',
+    matchedEntry: { id: 5, description: 'Payment received for INV-0002' },
+    orphanEntries: [],
+  });
+  assert.equal(result.status, 'void_skip');
+});
+
+test('classifyPayment: invoice void wins over an ambiguous source_id collision', () => {
+  const result = classifyPayment({
+    invoiceNumber: 'INV-0002',
+    invoiceStatus: 'void',
+    matchedEntry: { id: 17, description: 'Payment received for INV-0004' },
+    orphanEntries: [],
+  });
+  assert.equal(result.status, 'void_skip');
+});
+
+test('classifyPayment: non-void invoice status is unaffected (still classifies normally)', () => {
+  const result = classifyPayment({
+    invoiceNumber: 'INV-0001',
+    invoiceStatus: 'paid',
+    matchedEntry: { id: 9, description: 'Payment received for INV-0001' },
+    orphanEntries: [],
+  });
+  assert.equal(result.status, 'covered');
+});
+
 test('classifyPayment: multiple orphans — matches the one naming this invoice', () => {
   const result = classifyPayment({
     invoiceNumber: 'INV-0002',
