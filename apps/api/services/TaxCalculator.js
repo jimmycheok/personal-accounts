@@ -1,7 +1,8 @@
 import { Op } from 'sequelize';
-import { Invoice, InvoiceItem, Expense, ExpenseCategory, MileageLog } from '../models/index.js';
+import { Invoice, InvoiceItem, MileageLog } from '../models/index.js';
 import { calculateTax, STANDARD_RELIEFS } from '@personal-accountant/shared/constants/taxBrackets';
 import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping';
+import LedgerQueryService from './LedgerQueryService.js';
 
 class TaxCalculator {
   /**
@@ -24,36 +25,17 @@ class TaxCalculator {
   }
 
   /**
-   * Get expenses grouped by Borang B section for a tax year
+   * Deductible expenses grouped by Borang B section, read from the general
+   * ledger so payment vouchers and journal entries count alongside expenses.
+   * Accounts with no borang_b_section (6995 Non-Deductible) are excluded.
+   * D15 Entertainment is halved by applySectionRules.
    */
   async getExpensesBySection(year) {
-    const startDate = `${year}-01-01`;
-    const endDate = `${year}-12-31`;
-
-    const expenses = await Expense.findAll({
-      where: {
-        expense_date: { [Op.between]: [startDate, endDate] },
-        is_tax_deductible: true,
-      },
-      include: [{ model: ExpenseCategory, as: 'category' }],
-    });
-
-    const sectionTotals = {};
-    Object.keys(BORANG_B_SECTIONS).forEach(sec => { sectionTotals[sec] = 0; });
-
-    expenses.forEach(exp => {
-      const section = exp.category?.borang_b_section;
-      if (!section || !sectionTotals.hasOwnProperty(section)) return;
-
-      let amount = parseFloat(exp.amount_myr || exp.amount);
-
-      // D15 (Entertainment) — 50% deductibility
-      if (section === 'D15') amount = amount * 0.5;
-
-      sectionTotals[section] += amount;
-    });
-
-    return { expenses, sectionTotals };
+    const sectionTotals = await LedgerQueryService.getExpensesBySection(
+      `${year}-01-01`,
+      `${year}-12-31`,
+    );
+    return { sectionTotals };
   }
 
   /**
