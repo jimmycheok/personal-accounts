@@ -233,8 +233,13 @@ export async function voidInvoice(req, res, next) {
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'void', void_reason: req.body.reason });
     if (req.body.journal_lines?.length) {
-      // Delete previous auto-entries for this invoice and create reversal
+      // Delete previous auto-entries for this invoice (both the invoice
+      // entry and, if it was paid, the payment inflow entry — see
+      // JournalEntryService.deletePaymentEntriesForInvoice for why a plain
+      // deleteAutoEntriesForSource('payment', invoice.id) is not safe) and
+      // create the reversal.
       await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+      await JournalEntryService.deletePaymentEntriesForInvoice(invoice);
       await JournalEntryService.createAutoEntry({
         entryDate: new Date().toISOString().split('T')[0],
         description: `Void invoice ${invoice.invoice_number}`,

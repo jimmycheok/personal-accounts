@@ -128,6 +128,44 @@ class JournalEntryService {
     }
   }
 
+  // ── Payment entries for an invoice (id-namespace-safe) ───────────────
+  /**
+   * Deletes every journal_entries row with source_type='payment' that
+   * belongs to this invoice — both a markPaid fallback entry (which stores
+   * sourceId = invoice.id) and any entries created from real Payment rows
+   * (sourceId = payment.id). Those two id spaces collide (invoice ids and
+   * payment ids are drawn from separate sequences that can produce the same
+   * number — see Amendment B / the backfill script's `classifyPayments`),
+   * so `source_id = invoice.id` alone is not a safe filter: it could delete
+   * an unrelated payment's entry that happens to share the id, or miss this
+   * invoice's own payments (whose entries are keyed by payment.id, not
+   * invoice.id).
+   *
+   * Disambiguate the same way the backfill script does: every entry this
+   * codebase creates for a payment names the invoice in its description
+   * ("Payment received for INV-0002" / "Full payment for INV-0002"), so an
+   * entry belongs to this invoice only if its description contains this
+   * invoice's own invoice_number. Invoice numbers are fixed-width
+   * (`INV-` + 4 digits) under normal use, so substring collisions between
+   * different invoice numbers are not expected — same caveat already
+   * accepted for the backfill script if a custom invoice_number is ever
+   * imported.
+   */
+  async deletePaymentEntriesForInvoice(invoice) {
+    if (!invoice.invoice_number) return 0;
+    const entries = await JournalEntry.findAll({
+      where: {
+        source_type: 'payment',
+        description: { [Op.iLike]: `%${invoice.invoice_number}%` },
+      },
+    });
+    for (const entry of entries) {
+      await JournalEntryLine.destroy({ where: { journal_entry_id: entry.id } });
+      await entry.destroy();
+    }
+    return entries.length;
+  }
+
   // ── Auto-entry trigger methods ───────────────────────────────────────
 
   async onInvoiceSent(invoice) {
@@ -230,6 +268,11 @@ class JournalEntryService {
 
   async onInvoiceVoided(invoice) {
     await this.deleteAutoEntriesForSource('invoice', invoice.id);
+    // A previously-paid invoice being voided also has a payment inflow entry
+    // (source_type='payment') that must go with it, or it survives as a
+    // phantom cash inflow. See deletePaymentEntriesForInvoice for why this
+    // can't just be deleteAutoEntriesForSource('payment', invoice.id).
+    await this.deletePaymentEntriesForInvoice(invoice);
   }
 
   async onPaymentDeleted(payment) {
