@@ -33,6 +33,32 @@
  *    (e.g. distinguishing draft vs sent/paid, choosing the right entry
  *    date) than a generic backfill loop should apply automatically. This
  *    script does not create invoice entries under --apply.
+ *
+ *  - The AMBIGUOUS check is a substring test: it accepts a match as
+ *    "genuinely covered" only if the matched entry's description contains
+ *    the payment's own invoice number. This is a deliberate, reviewed
+ *    design decision (do not change it without a new ruling) but it has a
+ *    known blind spot: a manually-created journal entry (POST
+ *    /journal-entries accepts arbitrary description text) whose
+ *    description happens to contain the payment's invoice number would
+ *    still be accepted as covered. Invoice numbers are normally
+ *    `INV-` + 4-digit padding, which makes prefix collisions between
+ *    different invoice numbers unlikely, but callers can supply custom
+ *    invoice numbers (e.g. imported data), so that padding is not
+ *    guaranteed. Net effect: AMBIGUOUS is a floor, not a ceiling — the
+ *    script can under-report ambiguity in unusual cases, but it can never
+ *    over-repair (an ambiguous id never reaches the --apply loop).
+ *
+ *  - Minor implementation notes:
+ *    - `missingIds(table, ...)` interpolates `table` directly into the SQL
+ *      string rather than binding it. Every call site passes a hardcoded
+ *      literal ('expenses' / 'payments' / 'invoices'), so this is not
+ *      exploitable today — noted so a future edit doesn't wire in
+ *      caller-supplied table names without adding validation.
+ *    - This script has no inter-process lock. Running two `--apply`
+ *      invocations concurrently could both read the same "missing" set
+ *      before either writes, causing a double insert. Idempotency is only
+ *      guaranteed for sequential runs — do not run --apply concurrently.
  */
 // Mirrors server.js: dotenv must run before any model/service import, and ES
 // static imports are hoisted, so the model imports below are dynamic.
@@ -45,6 +71,12 @@ loadEnv({ path: resolve(__dirname, '../../../.env') });
 
 const { sequelize, Expense, Payment, Invoice, ExpenseCategory } = await import('../models/index.js');
 const { default: JournalEntryService } = await import('../services/JournalEntryService.js');
+
+// This script's output is a human safety gate before writing to live books —
+// keep it readable regardless of NODE_ENV (config/database.js enables SQL
+// query logging whenever NODE_ENV=development, which would otherwise bury
+// the summary and the AMBIGUOUS detail block under raw SQL).
+sequelize.options.logging = false;
 
 const APPLY = process.argv.includes('--apply');
 
