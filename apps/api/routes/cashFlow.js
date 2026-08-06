@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { verifyJwt } from '../middlewares/verifyJwt.js';
-import { Invoice, Expense } from '../models/index.js';
-import { Op } from 'sequelize';
+import LedgerQueryService from '../services/LedgerQueryService.js';
 import CashFlowService from '../services/CashFlowService.js';
 
 const router = Router();
@@ -18,60 +17,24 @@ router.get('/projection', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /cash-flow/actual?from=2025-01-01&to=2025-12-31
-// Returns actual cash inflows (paid invoices) and outflows (expenses) grouped by month.
-// Every month in the from–to range is always present, zero-filled if no data.
+// GET /cash-flow/actual?from=2026-01-01&to=2026-12-31
+// Sourced from the general ledger: an inflow is a debit to a cash account and
+// an outflow is a credit to one, so invoices, expenses and payment vouchers all
+// count. Every month in range is present, zero-filled.
 router.get('/actual', async (req, res, next) => {
   try {
     const now = new Date();
     const from = req.query.from || new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
     const to = req.query.to || new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
 
-    const [invoices, expenses] = await Promise.all([
-      Invoice.findAll({
-        where: {
-          status: 'paid',
-          paid_at: { [Op.between]: [new Date(`${from}T00:00:00`), new Date(`${to}T23:59:59`)] },
-        },
-        attributes: ['paid_at', 'total'],
-      }),
-      Expense.findAll({
-        where: { expense_date: { [Op.between]: [from, to] } },
-        attributes: ['expense_date', 'amount_myr', 'amount'],
-      }),
-    ]);
+    const monthly = await LedgerQueryService.getCashFlowByMonth(from, to);
 
-    // Pre-fill every month in the range with zeros so the chart always shows all slots
-    const monthly = {};
-    const cursor = new Date(`${from.slice(0, 7)}-01`);
-    const end = new Date(`${to.slice(0, 7)}-01`);
-    while (cursor <= end) {
-      const key = cursor.toISOString().slice(0, 7); // YYYY-MM
-      const label = cursor.toLocaleString('en-MY', { month: 'short', year: '2-digit' }); // e.g. "Jan 25"
-      monthly[key] = { month: label, income: 0, expenses: 0, net: 0 };
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-
-    for (const inv of invoices) {
-      const key = new Date(inv.paid_at).toISOString().slice(0, 7);
-      if (monthly[key]) monthly[key].income += parseFloat(inv.total || 0);
-    }
-
-    for (const exp of expenses) {
-      const key = exp.expense_date.slice(0, 7);
-      if (monthly[key]) monthly[key].expenses += parseFloat(exp.amount_myr || exp.amount || 0);
-    }
-
-    const result = Object.keys(monthly)
-      .sort()
-      .map(k => ({ ...monthly[k], net: monthly[k].income - monthly[k].expenses }));
-
-    const totalIncome = result.reduce((s, m) => s + m.income, 0);
-    const totalExpenses = result.reduce((s, m) => s + m.expenses, 0);
+    const totalIncome = monthly.reduce((s, m) => s + m.income, 0);
+    const totalExpenses = monthly.reduce((s, m) => s + m.expenses, 0);
     const netCashFlow = totalIncome - totalExpenses;
-    const avgMonthlyNet = result.length ? netCashFlow / result.length : 0;
+    const avgMonthlyNet = monthly.length ? netCashFlow / monthly.length : 0;
 
-    res.json({ from, to, monthly: result, totals: { totalIncome, totalExpenses, netCashFlow, avgMonthlyNet } });
+    res.json({ from, to, monthly, totals: { totalIncome, totalExpenses, netCashFlow, avgMonthlyNet } });
   } catch (err) { next(err); }
 });
 
