@@ -1073,3 +1073,30 @@ Compensating rollback per site:
   so compensation is just `await payment.destroy()`, then rethrow.
 - `invoicesController.send` / `markPaid` — capture the prior field values before
   `invoice.update(...)`, restore them on GL failure, then rethrow.
+
+---
+
+## Amendment B — `source_type='payment'` id-namespace collision (ruled by Jimmy, 2026-08-06)
+
+`invoicesController.markPaid` posts its entry with `sourceType: 'payment', sourceId: invoice.id`,
+using the **same namespace** as entries created from real `Payment` rows (`sourceId: payment.id`).
+Invoice ids and payment ids therefore collide. Confirmed live in the dev database:
+`journal_entries` has `source_type='payment', source_id=4` describing INV-0004 (invoice 4's markPaid),
+while `payments.id = 4` is a genuine RM50 payment against invoice 2 that has **no** entry.
+
+Consequences:
+- The backfill's LEFT JOIN treats payment 4 as already covered and silently skips it, so its money
+  would be missing from cash flow once the read surfaces switch to the GL.
+- `deleteAutoEntriesForSource('payment', id)` is likewise ambiguous and could reverse the wrong entry.
+
+Descriptions do not disambiguate — both kinds render `Payment received for ${invoice_number}`.
+
+**Ruling: do not redesign `source_type` here.** Instead the backfill must never silently skip.
+Where the matched entry cannot be confirmed to belong to the payment, report it as AMBIGUOUS and
+leave it unrepaired for manual review.
+
+Detection rule: for payment `P` matched to entry `JE`, resolve `P.invoice_id`'s `invoice_number`.
+If `JE.description` contains that invoice number, treat as genuinely covered. Otherwise treat as
+AMBIGUOUS — report `payment.id`, amount, its invoice number, the matched `JE.id` and `JE.description`.
+
+The underlying namespace flaw remains open as follow-up work, out of scope for this plan.
