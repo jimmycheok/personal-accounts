@@ -105,6 +105,7 @@ export async function update(req, res, next) {
 
     const { items, ...invoiceData } = req.body;
     const before = invoice.toJSON();
+    const wasPostedToGl = invoice.status !== 'draft'; // 'sent' / 'overdue' already have an onInvoiceSent entry
 
     if (items) {
       await InvoiceItem.destroy({ where: { invoice_id: invoice.id } });
@@ -114,6 +115,25 @@ export async function update(req, res, next) {
     }
 
     await invoice.update(invoiceData);
+
+    // The GL is the source of truth for cash flow, dashboard and tax. An
+    // invoice that was already sent/overdue has a stale AR/revenue entry
+    // (posted at the old total) — if the total actually changed, replace
+    // it: delete the old auto-entry and repost from the updated invoice. A
+    // still-draft invoice has no entry yet and needs none here.
+    if (wasPostedToGl && parseFloat(before.total) !== parseFloat(invoice.total)) {
+      try {
+        await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+        await JournalEntryService.onInvoiceSent(invoice);
+      } catch (err) {
+        console.error(
+          `GL repost failed for invoice ${invoice.id} after an edit — record may have no journal entry:`,
+          err.message,
+        );
+        throw err;
+      }
+    }
+
     await writeAuditLog({ action: 'update', subjectType: 'Invoice', subjectId: invoice.id, before, after: invoice.toJSON() });
     res.json(await Invoice.findByPk(invoice.id, { include: ['items', 'customer'] }));
   } catch (err) {

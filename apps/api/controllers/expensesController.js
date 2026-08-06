@@ -96,12 +96,43 @@ export async function getById(req, res, next) {
   }
 }
 
+// Fields that change the amount posted to the GL or which account it posts
+// to. Editing anything else (notes, vendor_name, etc.) must not churn the
+// ledger with a delete + repost.
+const GL_MATERIAL_FIELDS = ['amount', 'exchange_rate', 'category_id', 'is_tax_deductible', 'expense_date'];
+
 export async function update(req, res, next) {
   try {
     const expense = await Expense.findByPk(req.params.id);
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     const amountMyr = parseFloat(req.body.amount || expense.amount) * (parseFloat(req.body.exchange_rate || expense.exchange_rate) || 1);
+
+    const isMaterial = GL_MATERIAL_FIELDS.some(
+      (field) => field in req.body && String(req.body[field]) !== String(expense[field]),
+    );
+
     await expense.update({ ...req.body, amount_myr: amountMyr });
+
+    // The GL is the source of truth for cash flow, dashboard and tax, so an
+    // edit to amount, category, deductibility or date must be reflected
+    // there too — otherwise those surfaces keep reporting the pre-edit
+    // figures indefinitely. Replace (not adjust) the entry: delete the old
+    // auto-entry for this expense, then re-derive from the updated record.
+    if (isMaterial) {
+      try {
+        await JournalEntryService.deleteAutoEntriesForSource('expense', expense.id);
+        await JournalEntryService.onExpenseCreated(
+          await expense.reload({ include: [{ association: 'category' }] }),
+        );
+      } catch (err) {
+        console.error(
+          `GL repost failed for expense ${expense.id} after an edit — record may have no journal entry:`,
+          err.message,
+        );
+        throw err;
+      }
+    }
+
     res.json(expense);
   } catch (err) {
     next(err);
