@@ -167,30 +167,28 @@ class JournalEntryService {
     const amount = parseFloat(expense.amount_myr || expense.amount);
     if (amount <= 0) return;
 
-    // Look up the GL account via the category's borang_b_section
-    const category = expense.category || await expense.getCategory();
-    if (!category || !category.borang_b_section) {
-      // Non-deductible or uncategorised — use Other Expenses (D20)
-      const account = await this.getAccountByCode('6999');
-      await this.createAutoEntry({
-        entryDate: expense.expense_date,
-        description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
-        lines: [
-          { accountId: account.id, debit: amount, credit: 0, description: expense.description || expense.vendor_name },
-          { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
-        ],
-        sourceType: 'expense',
-        sourceId: expense.id,
-      });
-      return;
+    // The Expense model carries no payment-method field, so expenses always
+    // credit the bank account. Cash-paid expenses can be reclassified via a
+    // manual journal entry if that ever matters.
+    const narration = expense.description || expense.vendor_name || 'Expense';
+
+    // Not claimable against tax → 6995, which carries no Borang B section so
+    // GL-sourced tax queries skip it while P&L still reports it.
+    let debitAccount;
+    if (expense.is_tax_deductible === false) {
+      debitAccount = await this.getAccountByCode('6995');
+    } else {
+      const category = expense.category || (expense.getCategory ? await expense.getCategory() : null);
+      debitAccount = category?.borang_b_section
+        ? await this.getExpenseAccountBySection(category.borang_b_section)
+        : await this.getAccountByCode('6999'); // Other Expenses (D20)
     }
 
-    const expenseAccount = await this.getExpenseAccountBySection(category.borang_b_section);
     await this.createAutoEntry({
       entryDate: expense.expense_date,
       description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
       lines: [
-        { accountId: expenseAccount.id, debit: amount, credit: 0, description: expense.description || expense.vendor_name },
+        { accountId: debitAccount.id, debit: amount, credit: 0, description: narration },
         { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
       ],
       sourceType: 'expense',

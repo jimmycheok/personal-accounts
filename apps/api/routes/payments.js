@@ -52,6 +52,9 @@ router.post('/', async (req, res, next) => {
       paid_at: newStatus === 'paid' ? new Date() : invoice.paid_at,
     });
 
+    // The GL is the source of truth for cash flow, dashboard and tax, so a
+    // payment must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them.
     if (req.body.journal_lines?.length) {
       await JournalEntryService.createAutoEntry({
         entryDate: payment.payment_date,
@@ -60,6 +63,8 @@ router.post('/', async (req, res, next) => {
         sourceType: 'payment',
         sourceId: payment.id,
       });
+    } else {
+      await JournalEntryService.onPaymentReceived(payment, invoice);
     }
     res.status(201).json({ payment, invoice: await invoice.reload() });
   } catch (err) { next(err); }

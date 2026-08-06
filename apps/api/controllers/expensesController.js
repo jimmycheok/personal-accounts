@@ -46,6 +46,9 @@ export async function create(req, res, next) {
     const amountMyr = parseFloat(data.amount) * (parseFloat(data.exchange_rate) || 1);
 
     const expense = await Expense.create({ ...data, tax_year: year, amount_myr: amountMyr });
+    // The GL is the source of truth for cash flow, dashboard and tax, so an
+    // expense must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them.
     if (data.journal_lines?.length) {
       await JournalEntryService.createAutoEntry({
         entryDate: expense.expense_date,
@@ -54,6 +57,10 @@ export async function create(req, res, next) {
         sourceType: 'expense',
         sourceId: expense.id,
       });
+    } else {
+      await JournalEntryService.onExpenseCreated(
+        await expense.reload({ include: [{ association: 'category' }] }),
+      );
     }
     await writeAuditLog({ action: 'create', subjectType: 'Expense', subjectId: expense.id });
     res.status(201).json(expense);

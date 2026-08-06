@@ -138,6 +138,9 @@ export async function send(req, res, next) {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'sent', sent_at: new Date() });
+    // The GL is the source of truth for cash flow, dashboard and tax, so an
+    // invoice must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them.
     if (req.body.journal_lines?.length) {
       await JournalEntryService.createAutoEntry({
         entryDate: invoice.issue_date,
@@ -146,6 +149,8 @@ export async function send(req, res, next) {
         sourceType: 'invoice',
         sourceId: invoice.id,
       });
+    } else {
+      await JournalEntryService.onInvoiceSent(invoice);
     }
     await writeAuditLog({ action: 'send', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
@@ -159,6 +164,9 @@ export async function markPaid(req, res, next) {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'paid', paid_at: new Date(), amount_paid: invoice.total, amount_due: 0 });
+    // The GL is the source of truth for cash flow, dashboard and tax, so an
+    // invoice must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them.
     if (req.body.journal_lines?.length) {
       await JournalEntryService.createAutoEntry({
         entryDate: new Date().toISOString().split('T')[0],
@@ -167,6 +175,11 @@ export async function markPaid(req, res, next) {
         sourceType: 'payment',
         sourceId: invoice.id,
       });
+    } else {
+      await JournalEntryService.onPaymentReceived(
+        { amount: invoice.total, payment_date: invoice.paid_at || new Date(), method: 'bank_transfer' },
+        invoice,
+      );
     }
     await writeAuditLog({ action: 'mark_paid', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
