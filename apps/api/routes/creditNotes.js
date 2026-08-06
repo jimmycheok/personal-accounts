@@ -5,6 +5,7 @@ import { Op } from 'sequelize';
 import MyInvoisService from '../services/MyInvoisService.js';
 import PdfService from '../services/PdfService.js';
 import JournalEntryService from '../services/JournalEntryService.js';
+import { ymd } from '../services/ledgerAggregation.js';
 
 const router = Router();
 router.use(verifyJwt);
@@ -75,7 +76,7 @@ router.post('/', async (req, res, next) => {
     const creditNote = await CreditNote.create({
       ...data,
       credit_note_number,
-      issue_date: data.issue_date || new Date().toISOString().split('T')[0],
+      issue_date: data.issue_date || ymd(new Date()),
       amount: data.amount ?? total,
       tax_amount: data.tax_amount ?? taxTotal,
       status: 'draft',
@@ -152,7 +153,7 @@ router.post('/:id/void', async (req, res, next) => {
       // Delete previous auto-entries and create reversal
       await JournalEntryService.deleteAutoEntriesForSource('credit_note', cn.id);
       await JournalEntryService.createAutoEntry({
-        entryDate: new Date().toISOString().split('T')[0],
+        entryDate: ymd(new Date()),
         description: `Void credit note ${cn.credit_note_number}`,
         lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
         sourceType: 'credit_note',

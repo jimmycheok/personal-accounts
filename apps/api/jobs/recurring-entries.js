@@ -2,6 +2,7 @@ import { RecurringTemplate, Invoice, InvoiceItem, Expense, ExpenseCategory, Busi
 import { Op } from 'sequelize';
 import { addDays, addWeeks, addMonths, addQuarters, addYears, format, parseISO } from 'date-fns';
 import JournalEntryService from '../services/JournalEntryService.js';
+import { ymd } from '../services/ledgerAggregation.js';
 
 function getNextDate(frequency, fromDate) {
   const date = typeof fromDate === 'string' ? parseISO(fromDate) : fromDate;
@@ -17,7 +18,7 @@ function getNextDate(frequency, fromDate) {
 
 export function defineRecurringEntriesJob(agenda) {
   agenda.define('generate-recurring-entries', async (job) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = ymd(new Date());
 
     const dueTemplates = await RecurringTemplate.findAll({
       where: {

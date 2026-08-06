@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifyJwt } from '../middlewares/verifyJwt.js';
 import LedgerQueryService from '../services/LedgerQueryService.js';
 import CashFlowService from '../services/CashFlowService.js';
+import { ymd } from '../services/ledgerAggregation.js';
 
 const router = Router();
 router.use(verifyJwt);
@@ -24,8 +25,8 @@ router.get('/projection', async (req, res, next) => {
 router.get('/actual', async (req, res, next) => {
   try {
     const now = new Date();
-    const from = req.query.from || new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
-    const to = req.query.to || new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
+    const from = req.query.from || ymd(new Date(now.getFullYear(), 0, 1));
+    const to = req.query.to || ymd(new Date(now.getFullYear(), 11, 31));
 
     const monthly = await LedgerQueryService.getCashFlowByMonth(from, to);
 

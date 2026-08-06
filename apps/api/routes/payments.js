@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifyJwt } from '../middlewares/verifyJwt.js';
 import { Payment, Invoice } from '../models/index.js';
 import JournalEntryService from '../services/JournalEntryService.js';
+import { ymd } from '../services/ledgerAggregation.js';
 
 // Mounted at /invoices/:invoiceId/payments
 const router = Router({ mergeParams: true });
@@ -34,7 +35,7 @@ router.post('/', async (req, res, next) => {
     const payment = await Payment.create({
       invoice_id: invoice.id,
       amount: parseFloat(amount),
-      payment_date: payment_date || new Date().toISOString().split('T')[0],
+      payment_date: payment_date || ymd(new Date()),
       method: payment_method || 'bank_transfer',
       reference,
       notes,

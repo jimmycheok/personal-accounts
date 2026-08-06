@@ -5,6 +5,7 @@ import PdfService from '../services/PdfService.js';
 import DuitNowService from '../services/DuitNowService.js';
 import MyInvoisService from '../services/MyInvoisService.js';
 import JournalEntryService from '../services/JournalEntryService.js';
+import { ymd } from '../services/ledgerAggregation.js';
 
 function recalcTotals(items) {
   let subtotal = 0, taxTotal = 0;
@@ -214,7 +215,7 @@ export async function markPaid(req, res, next) {
     try {
       if (req.body.journal_lines?.length) {
         await JournalEntryService.createAutoEntry({
-          entryDate: new Date().toISOString().split('T')[0],
+          entryDate: ymd(new Date()),
           description: `Full payment for ${invoice.invoice_number}`,
           lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
           sourceType: 'payment',
@@ -261,7 +262,7 @@ export async function voidInvoice(req, res, next) {
       await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
       await JournalEntryService.deletePaymentEntriesForInvoice(invoice);
       await JournalEntryService.createAutoEntry({
-        entryDate: new Date().toISOString().split('T')[0],
+        entryDate: ymd(new Date()),
         description: `Void invoice ${invoice.invoice_number}`,
         lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
         sourceType: 'invoice',
@@ -295,7 +296,7 @@ export async function duplicate(req, res, next) {
       paid_at: null,
       amount_paid: 0,
       amount_due: invoice.total,
-      issue_date: new Date().toISOString().split('T')[0],
+      issue_date: ymd(new Date()),
       einvoice_long_id: null,
       createdAt: undefined,
       updatedAt: undefined,
