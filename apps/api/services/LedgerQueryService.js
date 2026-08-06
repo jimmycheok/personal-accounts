@@ -61,6 +61,30 @@ class LedgerQueryService {
     );
     return applySectionRules(rows);
   }
+
+  /**
+   * Revenue total (SUM(credit) - SUM(debit)) over revenue accounts for the
+   * period, posted only, excluding year_end_close. This is accrual income —
+   * a manual entry crediting 4000, or a sent-but-unpaid invoice's AR/revenue
+   * entry, counts just the same as a paid invoice does. That is a deliberate
+   * basis change for Borang B (see TaxCalculator.generateBorangBData): the
+   * GL is now the single source of truth for income too, matching how
+   * expenses are already read.
+   */
+  async getIncomeTotal(from, to) {
+    const [rows] = await sequelize.query(
+      `SELECT COALESCE(SUM(jel.credit), 0) - COALESCE(SUM(jel.debit), 0) AS amount
+       FROM journal_entry_lines jel
+       JOIN journal_entries je ON je.id = jel.journal_entry_id
+       JOIN accounts a        ON a.id = jel.account_id
+       WHERE je.status = 'posted'
+         AND a.account_type = 'revenue'
+         AND je.entry_date BETWEEN :from AND :to
+         AND je.source_type != 'year_end_close'`,
+      { replacements: { from, to } },
+    );
+    return Math.round(parseFloat(rows[0]?.amount || 0) * 100) / 100;
+  }
 }
 
 export default new LedgerQueryService();

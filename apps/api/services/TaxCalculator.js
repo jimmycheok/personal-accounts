@@ -50,10 +50,25 @@ class TaxCalculator {
   }
 
   /**
-   * Generate full Borang B data for a year
+   * Generate full Borang B data for a year.
+   *
+   * Income is now GL-sourced (accrual), not the `invoices.paid_at`
+   * cash-received figure `getIncomeForYear` returns. Two reasons:
+   *   1. A manual journal entry crediting 4000 (Sales Revenue) counted in
+   *      the P&L but not here, while a manual entry debiting an expense
+   *      account counted as a deduction here — the two sides disagreed.
+   *   2. `paid_at` is a timestamp compared against plain 'Y-01-01'/'Y-12-31'
+   *      strings (no time component), so an invoice paid on Dec 31 could
+   *      fall outside the range depending on time-of-day, while
+   *      `/taxation/income-summary` handles that boundary correctly with
+   *      `T23:59:59`. GL entry_date is a DATEONLY column compared with
+   *      BETWEEN, which has no such boundary problem.
+   * `getIncomeForYear` is still called for `partB.invoiceCount` (display
+   * metadata only — not used in the tax calculation below).
    */
   async generateBorangBData(year) {
-    const { totalIncome, invoices } = await this.getIncomeForYear(year);
+    const { invoices } = await this.getIncomeForYear(year);
+    const totalIncome = await LedgerQueryService.getIncomeTotal(`${year}-01-01`, `${year}-12-31`);
     const { sectionTotals } = await this.getExpensesBySection(year);
     const { totalKm, deductibleAmount: mileageDeduction } = await this.getMileageDeduction(year);
 
