@@ -1100,3 +1100,35 @@ If `JE.description` contains that invoice number, treat as genuinely covered. Ot
 AMBIGUOUS — report `payment.id`, amount, its invoice number, the matched `JE.id` and `JE.description`.
 
 The underlying namespace flaw remains open as follow-up work, out of scope for this plan.
+
+---
+
+## Amendment C — timezone date-boundary bug (controller ruling, 2026-08-06)
+
+Task 5's review found that `CashFlowService.getProjection`'s actuals block builds
+`monthStart`/`monthEnd` as local `new Date(y, m, d)` objects and then converts them with
+`.toISOString().split('T')[0]` before comparing against the `DATEONLY` `entry_date` column.
+On any host east of UTC this shifts the window back a day. Reproduced on this machine (`+08`):
+
+```
+new Date(2026, 7, 1).toISOString().split('T')[0]  ->  2026-07-31   (wanted 2026-08-01)
+new Date(2026, 8, 0).toISOString().split('T')[0]  ->  2026-08-30   (wanted 2026-08-31)
+```
+
+So August's actuals window becomes `[2026-07-31, 2026-08-30]` — it double-counts July 31 and
+drops August 31. This is a regression for `actualIncome`, which previously compared raw `Date`
+objects against a timestamp column and was timezone-safe.
+
+**Ruling: fix (no user decision needed — there is no tradeoff, the behaviour is simply wrong).**
+Format local calendar dates directly instead of round-tripping through UTC:
+
+```javascript
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+```
+
+Scope: `/cash-flow/actual` is unaffected (it uses query-string dates as-is), as are
+`getCashFlowByMonth` / `getCashTotals` / `getExpensesBySection`.
+
+**Task 6 carries the same hazard:** `dashboardController.getPeriodDates` returns `Date` objects
+and the existing code applies the same `.toISOString().split('T')[0]` conversion. Task 6 must use
+the same `ymd` helper rather than repeating the bug.
