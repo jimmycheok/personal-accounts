@@ -150,8 +150,14 @@ router.post('/:id/void', async (req, res, next) => {
     if (!cn) return res.status(404).json({ error: 'Credit note not found' });
     await cn.update({ status: 'cancelled', void_reason: req.body?.reason || null });
     if (req.body.journal_lines?.length) {
-      // Delete previous auto-entries and create reversal
-      await JournalEntryService.deleteAutoEntriesForSource('credit_note', cn.id);
+      // Posted ledger entries are reversed, not deleted (same ruling as the
+      // invoice void fix — see final-round-report.md Fix A). The original
+      // credit note entry (DR 4000 / CR 1100, i.e. -amount to revenue)
+      // stays; the reviewed reversal below (DR 1100 / CR 4000, +amount)
+      // nets it back to zero. Deleting the original here was a bug: delete
+      // (+amount, since removing a -amount entry raises revenue back up)
+      // plus the reversal (+amount again) drove revenue up by +amount
+      // instead of 0 — voiding a credit note was overstating income.
       await JournalEntryService.createAutoEntry({
         entryDate: ymd(new Date()),
         description: `Void credit note ${cn.credit_note_number}`,

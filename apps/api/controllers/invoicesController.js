@@ -254,12 +254,20 @@ export async function voidInvoice(req, res, next) {
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'void', void_reason: req.body.reason });
     if (req.body.journal_lines?.length) {
-      // Delete previous auto-entries for this invoice (both the invoice
-      // entry and, if it was paid, the payment inflow entry — see
-      // JournalEntryService.deletePaymentEntriesForInvoice for why a plain
-      // deleteAutoEntriesForSource('payment', invoice.id) is not safe) and
-      // create the reversal.
-      await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+      // Posted ledger entries are reversed, not deleted: the original
+      // invoice entry (+total to revenue) stays, and the reversal the user
+      // reviewed in GLReviewModal (-total) is posted alongside it, netting
+      // to zero with a correct audit trail. Deleting the original here was
+      // a bug — the reversal's default template already debits 4000 by
+      // total, so deleting the original AND posting the reversal drove
+      // revenue by -total instead of 0 (see final-round-report.md Fix A).
+      //
+      // The payment inflow entry (if the invoice had been paid) is still
+      // deleted outright — that one is a phantom cash inflow for money
+      // never received, not a posted revenue event, so there is nothing to
+      // reverse (see JournalEntryService.deletePaymentEntriesForInvoice for
+      // why a plain deleteAutoEntriesForSource('payment', invoice.id) is
+      // not safe).
       await JournalEntryService.deletePaymentEntriesForInvoice(invoice);
       await JournalEntryService.createAutoEntry({
         entryDate: ymd(new Date()),
