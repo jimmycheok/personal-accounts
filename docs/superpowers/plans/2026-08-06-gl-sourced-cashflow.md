@@ -1132,3 +1132,17 @@ Scope: `/cash-flow/actual` is unaffected (it uses query-string dates as-is), as 
 **Task 6 carries the same hazard:** `dashboardController.getPeriodDates` returns `Date` objects
 and the existing code applies the same `.toISOString().split('T')[0]` conversion. Task 6 must use
 the same `ymd` helper rather than repeating the bug.
+
+---
+
+## Amendment D — share the `ymd` helper (controller ruling, 2026-08-06)
+
+Amendment C's fix introduced a local `ymd()` in `CashFlowService.js`. Task 6's
+`dashboardController.getPeriodDates` has the identical `.toISOString().split('T')[0]` hazard and
+needs the same helper. Duplicating it would be a DRY defect and would let the two copies drift.
+
+**Ruling:** move `ymd` into `apps/api/services/ledgerAggregation.js` as a named export, import it
+in both `CashFlowService.js` and `dashboardController.js`, and add unit tests for it there —
+including zero-padding for single-digit months/days and the `+08` boundary case that Amendment C
+reproduced. That module is already the home for pure date/money helpers and is the only
+unit-tested file in the API, so the regression we just fixed gains permanent coverage.
