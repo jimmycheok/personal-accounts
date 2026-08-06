@@ -26,6 +26,7 @@ import api from '../../services/api.js';
 import AddExpenseModal from '../../components/AddExpenseModal.jsx';
 import AttachmentsPanel from '../../components/AttachmentsPanel.jsx';
 import ConfirmModal from '../../components/ConfirmModal.jsx';
+import ModuleIntro from '../../components/ModuleIntro.jsx';
 
 const HEADERS = [
   { key: 'date', header: 'Date' },
@@ -92,8 +93,14 @@ export default function ExpensesPage() {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Expenses</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', gap: '1rem' }}>
+        <div>
+          <h1 className="page-title" style={{ margin: 0 }}>Expenses</h1>
+          <ModuleIntro>
+            Money you spent where <strong>the seller gave you the paperwork</strong> — a receipt,
+            bill or supplier invoice. Record it here and attach their document.
+          </ModuleIntro>
+        </div>
         <Button renderIcon={Add} onClick={() => setModalOpen(true)}>Add Expense</Button>
       </div>
 
