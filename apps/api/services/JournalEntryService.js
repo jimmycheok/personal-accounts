@@ -128,6 +128,29 @@ class JournalEntryService {
     }
   }
 
+  // ── Detect non-default accounts before an automatic repost ──────────
+  /**
+   * Returns the sorted, de-duplicated account codes used by the posted
+   * auto-entries for a source. Callers use this to detect whether an entry
+   * was originally posted with non-default accounts (e.g. reviewed and
+   * edited in GLReviewModal) before deciding whether an automatic repost —
+   * which always uses hardcoded default accounts — is safe, or would
+   * silently discard the user's reviewed choice.
+   */
+  async getAutoEntryAccountCodes(sourceType, sourceId) {
+    const entries = await JournalEntry.findAll({
+      where: { source_type: sourceType, source_id: sourceId, is_auto: true },
+      include: [{ model: JournalEntryLine, as: 'lines', include: [{ model: Account, as: 'account' }] }],
+    });
+    const codes = new Set();
+    for (const entry of entries) {
+      for (const line of entry.lines || []) {
+        if (line.account?.code) codes.add(line.account.code);
+      }
+    }
+    return [...codes].sort();
+  }
+
   // ── Payment entries for an invoice (id-namespace-safe) ───────────────
   /**
    * Deletes every journal_entries row with source_type='payment' that
@@ -207,6 +230,26 @@ class JournalEntryService {
     });
   }
 
+  /**
+   * The account an expense's debit line would use, given its own
+   * is_tax_deductible flag and category. Factored out of onExpenseCreated
+   * so a caller (e.g. expensesController.update, Fix E) can compute what
+   * the "default" account *would* be for a given expense snapshot without
+   * actually posting, in order to tell a default posting apart from one
+   * that was reviewed and customised in GLReviewModal.
+   */
+  async resolveExpenseDebitAccount(expense) {
+    // Not claimable against tax → 6995, which carries no Borang B section so
+    // GL-sourced tax queries skip it while P&L still reports it.
+    if (expense.is_tax_deductible === false) {
+      return this.getAccountByCode('6995');
+    }
+    const category = expense.category || (expense.getCategory ? await expense.getCategory() : null);
+    return category?.borang_b_section
+      ? this.getExpenseAccountBySection(category.borang_b_section)
+      : this.getAccountByCode('6999'); // Other Expenses (D20)
+  }
+
   async onExpenseCreated(expense) {
     const amount = parseFloat(expense.amount_myr || expense.amount);
     if (amount <= 0) return;
@@ -215,18 +258,7 @@ class JournalEntryService {
     // credit the bank account. Cash-paid expenses can be reclassified via a
     // manual journal entry if that ever matters.
     const narration = expense.description || expense.vendor_name || 'Expense';
-
-    // Not claimable against tax → 6995, which carries no Borang B section so
-    // GL-sourced tax queries skip it while P&L still reports it.
-    let debitAccount;
-    if (expense.is_tax_deductible === false) {
-      debitAccount = await this.getAccountByCode('6995');
-    } else {
-      const category = expense.category || (expense.getCategory ? await expense.getCategory() : null);
-      debitAccount = category?.borang_b_section
-        ? await this.getExpenseAccountBySection(category.borang_b_section)
-        : await this.getAccountByCode('6999'); // Other Expenses (D20)
-    }
+    const debitAccount = await this.resolveExpenseDebitAccount(expense);
 
     await this.createAutoEntry({
       entryDate: expense.expense_date,

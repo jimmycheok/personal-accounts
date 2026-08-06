@@ -103,13 +103,22 @@ const GL_MATERIAL_FIELDS = ['amount', 'exchange_rate', 'category_id', 'is_tax_de
 
 export async function update(req, res, next) {
   try {
-    const expense = await Expense.findByPk(req.params.id);
+    const expense = await Expense.findByPk(req.params.id, { include: [{ association: 'category' }] });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     const amountMyr = parseFloat(req.body.amount || expense.amount) * (parseFloat(req.body.exchange_rate || expense.exchange_rate) || 1);
 
     const isMaterial = GL_MATERIAL_FIELDS.some(
       (field) => field in req.body && String(req.body[field]) !== String(expense[field]),
     );
+
+    // Fix E: compute what account the existing entry *should* use, per the
+    // PRE-edit record (category / is_tax_deductible), before the update
+    // below mutates them. Comparing this against the entry's actual
+    // account afterwards tells a default posting apart from one that was
+    // reviewed and customised in GLReviewModal.
+    const expectedDebitCodeBefore = isMaterial
+      ? (await JournalEntryService.resolveExpenseDebitAccount(expense)).code
+      : null;
 
     await expense.update({ ...req.body, amount_myr: amountMyr });
 
@@ -118,18 +127,37 @@ export async function update(req, res, next) {
     // there too — otherwise those surfaces keep reporting the pre-edit
     // figures indefinitely. Replace (not adjust) the entry: delete the old
     // auto-entry for this expense, then re-derive from the updated record.
+    //
+    // Unless the existing entry was posted with non-default accounts (i.e.
+    // reviewed/edited in GLReviewModal) — reposting via onExpenseCreated
+    // would silently revert those to the computed defaults. Detect that
+    // and skip the automatic repost instead, logging loudly for manual
+    // review (same ruling as the invoice repost path — see Fix E in
+    // final-round-report.md).
     if (isMaterial) {
-      try {
-        await JournalEntryService.deleteAutoEntriesForSource('expense', expense.id);
-        await JournalEntryService.onExpenseCreated(
-          await expense.reload({ include: [{ association: 'category' }] }),
-        );
-      } catch (err) {
-        console.error(
-          `GL repost failed for expense ${expense.id} after an edit — record may have no journal entry:`,
-          err.message,
-        );
-        throw err;
+      const existingCodes = await JournalEntryService.getAutoEntryAccountCodes('expense', expense.id);
+      const usesDefaultAccounts =
+        existingCodes.length === 0 ||
+        existingCodes.every((c) => c === '1010' || c === expectedDebitCodeBefore);
+
+      if (!usesDefaultAccounts) {
+        const reason =
+          `existing entry uses non-default accounts (${existingCodes.join(', ')}); ` +
+          `edit was NOT reflected in the journal entry`;
+        console.error(`GL repost skipped for expense ${expense.id}: ${reason}. Needs manual review.`);
+      } else {
+        try {
+          await JournalEntryService.deleteAutoEntriesForSource('expense', expense.id);
+          await JournalEntryService.onExpenseCreated(
+            await expense.reload({ include: [{ association: 'category' }] }),
+          );
+        } catch (err) {
+          console.error(
+            `GL repost failed for expense ${expense.id} after an edit — record may have no journal entry:`,
+            err.message,
+          );
+          throw err;
+        }
       }
     }
 

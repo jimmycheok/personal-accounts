@@ -7,6 +7,11 @@ import MyInvoisService from '../services/MyInvoisService.js';
 import JournalEntryService from '../services/JournalEntryService.js';
 import { ymd } from '../services/ledgerAggregation.js';
 
+// The default repost path (JournalEntryService.onInvoiceSent) always posts
+// to these two accounts. Used to detect whether an invoice's existing entry
+// was posted with non-default accounts before an automatic repost (Fix E).
+const DEFAULT_INVOICE_SENT_CODES = ['1100', '4000'];
+
 function recalcTotals(items) {
   let subtotal = 0, taxTotal = 0;
   const recalcItems = items.map(item => {
@@ -122,20 +127,60 @@ export async function update(req, res, next) {
     // (posted at the old total) — if the total actually changed, replace
     // it: delete the old auto-entry and repost from the updated invoice. A
     // still-draft invoice has no entry yet and needs none here.
+    //
+    // Fix E: the default repost (onInvoiceSent) always uses accounts
+    // 1100/4000. If the existing entry was originally posted through
+    // GLReviewModal with different accounts, blindly reposting would
+    // silently discard the user's reviewed choice. Detect that case first
+    // and skip the automatic repost — log loudly so the entry gets manual
+    // review instead of a silent account reversion.
+    let glRepostSkippedReason = null;
     if (wasPostedToGl && parseFloat(before.total) !== parseFloat(invoice.total)) {
-      try {
-        await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
-        await JournalEntryService.onInvoiceSent(invoice);
-      } catch (err) {
-        console.error(
-          `GL repost failed for invoice ${invoice.id} after an edit — record may have no journal entry:`,
-          err.message,
-        );
-        throw err;
+      const existingCodes = await JournalEntryService.getAutoEntryAccountCodes('invoice', invoice.id);
+      const usesDefaultAccounts =
+        existingCodes.length === 0 ||
+        (existingCodes.length === DEFAULT_INVOICE_SENT_CODES.length &&
+          existingCodes.every((c) => DEFAULT_INVOICE_SENT_CODES.includes(c)));
+
+      if (!usesDefaultAccounts) {
+        glRepostSkippedReason =
+          `existing entry uses non-default accounts (${existingCodes.join(', ')}); ` +
+          `total changed from ${before.total} to ${invoice.total} but the journal entry was NOT updated`;
+        console.error(`GL repost skipped for invoice ${invoice.id}: ${glRepostSkippedReason}. Needs manual review.`);
+      } else {
+        try {
+          await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+          await JournalEntryService.onInvoiceSent(invoice);
+        } catch (err) {
+          // Fix F: the record's fields are already persisted at this point
+          // (invoice.update already committed above). Audit that change
+          // even though the GL repost failed, so the mismatch is recorded
+          // instead of silently persisted-but-unaudited.
+          await writeAuditLog({
+            action: 'update',
+            subjectType: 'Invoice',
+            subjectId: invoice.id,
+            before,
+            after: invoice.toJSON(),
+            meta: { gl_repost_failed: true, error: err.message },
+          });
+          console.error(
+            `GL repost failed for invoice ${invoice.id} after an edit — record may have no journal entry:`,
+            err.message,
+          );
+          throw err;
+        }
       }
     }
 
-    await writeAuditLog({ action: 'update', subjectType: 'Invoice', subjectId: invoice.id, before, after: invoice.toJSON() });
+    await writeAuditLog({
+      action: 'update',
+      subjectType: 'Invoice',
+      subjectId: invoice.id,
+      before,
+      after: invoice.toJSON(),
+      ...(glRepostSkippedReason ? { meta: { gl_repost_skipped: true, reason: glRepostSkippedReason } } : {}),
+    });
     res.json(await Invoice.findByPk(invoice.id, { include: ['items', 'customer'] }));
   } catch (err) {
     next(err);
