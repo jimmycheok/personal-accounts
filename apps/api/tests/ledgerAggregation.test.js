@@ -111,3 +111,9 @@ test('ymd does not shift the date across the UTC boundary (regression)', () => {
   assert.equal(ymd(new Date(2026, 7, 1)), '2026-08-01');
   assert.equal(ymd(new Date(2026, 8, 0)), '2026-08-31');
 });
+
+test('ymd keeps the local calendar year at a UTC year boundary', () => {
+  // At +08 this instant is 2026-12-31 in UTC but 2027-01-01 locally.
+  assert.equal(ymd(new Date(2027, 0, 1)), '2027-01-01');
+  assert.equal(ymd(new Date(2026, 11, 31)), '2026-12-31');
+});

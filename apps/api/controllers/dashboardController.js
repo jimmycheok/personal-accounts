@@ -1,4 +1,4 @@
-import { Op, fn, col, literal } from 'sequelize';
+import { Op } from 'sequelize';
 import { Invoice, Expense, Customer, MileageLog } from '../models/index.js';
 import TaxCalculator from '../services/TaxCalculator.js';
 import CashFlowService from '../services/CashFlowService.js';
@@ -103,7 +103,7 @@ export async function upcomingDeadlines(req, res, next) {
     const upcoming = await Invoice.findAll({
       where: {
         status: 'sent',
-        due_date: { [Op.between]: [today.toISOString().split('T')[0], in30Days.toISOString().split('T')[0]] },
+        due_date: { [Op.between]: [ymd(today), ymd(in30Days)] },
       },
       include: [{ model: Customer, as: 'customer', attributes: ['name'] }],
       order: [['due_date', 'ASC']],
