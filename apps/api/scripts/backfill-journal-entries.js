@@ -11,14 +11,16 @@
  *  - source_type='payment' holds two id namespaces. Entries created from a
  *    real `Payment` row store source_id = payment.id. Entries created by
  *    invoicesController.markPaid's fallback store source_id = invoice.id
- *    under the SAME source_type='payment'. If a payments.id ever equals an
- *    invoice.id that already has a markPaid entry, the LEFT JOIN below will
- *    treat the payment as already covered even though the entry actually
- *    belongs to an unrelated invoice. This is a pre-existing data-model
- *    ambiguity, not something this script can safely resolve — re-architecting
- *    source_type is out of scope here. The dry-run output below cannot detect
- *    this collision case; only a manual reconciliation against the payments
- *    table can.
+ *    under the SAME source_type='payment'. So a payments row and an
+ *    unrelated invoice's markPaid entry can share the same source_id. A
+ *    plain LEFT JOIN cannot tell these apart and would silently treat a
+ *    genuinely-missing payment as already covered — confirmed live in this
+ *    repo (payment id 4 collided with invoice 4's markPaid entry). Rather
+ *    than re-architecting source_type (out of scope), this script resolves
+ *    the ambiguity per match: it compares the payment's own invoice_number
+ *    against the matched entry's description (see `classifyPayments`
+ *    below). A match whose description doesn't mention the payment's own
+ *    invoice is reported as AMBIGUOUS and is never auto-repaired.
  *
  *  - Orphan entries with source_type='payment' AND source_id IS NULL are
  *    pre-Task-3 markPaid artifacts. They cannot be matched back to any
@@ -66,20 +68,82 @@ async function orphanPaymentEntryCount() {
   return rows[0].count;
 }
 
+// Classifies every payment into one of three buckets:
+//   - missing:    no journal_entries row matches source_type='payment' AND
+//                 source_id=payment.id at all. Safe to auto-repair.
+//   - ambiguous:  a row DOES match on (source_type, source_id), but its
+//                 description does not mention the payment's own invoice
+//                 number — i.e. the match is source_id collateral damage
+//                 from an unrelated invoice's markPaid entry (see the file
+//                 header). Never auto-repaired; surfaced for manual review.
+//   - covered:    a row matches AND its description mentions the payment's
+//                 own invoice number — genuinely already posted. Skipped
+//                 silently, same as before.
+async function classifyPayments() {
+  const [rows] = await sequelize.query(`
+    SELECT p.id AS payment_id, p.amount, p.invoice_id, inv.invoice_number,
+           je.id AS entry_id, je.description AS entry_description
+    FROM payments p
+    LEFT JOIN invoices inv ON inv.id = p.invoice_id
+    LEFT JOIN journal_entries je
+      ON je.source_type = 'payment' AND je.source_id = p.id
+    ORDER BY p.id
+  `);
+
+  const missing = [];
+  const ambiguous = [];
+
+  for (const row of rows) {
+    if (row.entry_id == null) {
+      missing.push(row.payment_id);
+      continue;
+    }
+    const description = row.entry_description || '';
+    const coveredByOwnInvoice = row.invoice_number && description.includes(row.invoice_number);
+    if (!coveredByOwnInvoice) {
+      ambiguous.push({
+        paymentId: row.payment_id,
+        amount: row.amount,
+        invoiceId: row.invoice_id,
+        invoiceNumber: row.invoice_number,
+        entryId: row.entry_id,
+        entryDescription: row.entry_description,
+      });
+    }
+    // else: description mentions this payment's own invoice — genuinely covered.
+  }
+
+  return { missing, ambiguous };
+}
+
+function formatAmbiguous(a) {
+  const amount = parseFloat(a.amount).toFixed(2);
+  const invoiceLabel = a.invoiceNumber ? `invoice ${a.invoiceId} / ${a.invoiceNumber}` : `invoice ${a.invoiceId} (invoice not found)`;
+  const lines = [
+    `  payment id=${a.paymentId} (RM${amount}, ${invoiceLabel})`,
+    `    matched journal entry ${a.entryId}, described "${a.entryDescription}"`,
+    `    -> NOT auto-repaired; review manually`,
+  ];
+  return lines.join('\n');
+}
+
 async function main() {
   const expenseIds = await missingIds('expenses', 'expense');
-  const paymentIds = await missingIds('payments', 'payment');
+  const { missing: paymentMissingIds, ambiguous: paymentAmbiguous } = await classifyPayments();
   const invoiceIds = (await missingIds('invoices', 'invoice')).length;
   const orphanPaymentEntries = await orphanPaymentEntryCount();
 
   console.log(`Expenses without a GL entry: ${expenseIds.length}`);
-  console.log(`Payments without a GL entry: ${paymentIds.length}`);
+  console.log(`Payments with no GL entry: ${paymentMissingIds.length}`);
+  console.log(`Payments AMBIGUOUS (need review): ${paymentAmbiguous.length}`);
+  paymentAmbiguous.forEach((a) => console.log(formatAmbiguous(a)));
   console.log(`Invoices without an issue entry: ${invoiceIds} (REPORT ONLY — this script does not repair invoices)`);
   console.log(`Orphan payment entries (source_id IS NULL, unreconcilable): ${orphanPaymentEntries} (REPORT ONLY — not repaired or deleted by this script)`);
 
   if (!APPLY) {
     console.log('\nDry run. Re-run with --apply to create the missing expense and payment entries.');
     console.log('Note: invoice and orphan-entry counts above are informational only and are never written by --apply.');
+    console.log('Note: AMBIGUOUS payments above are never written by --apply either — they need manual review.');
     return;
   }
 
@@ -94,7 +158,7 @@ async function main() {
     } catch (err) { failures.push(`expense ${id}: ${err.message}`); }
   }
 
-  for (const id of paymentIds) {
+  for (const id of paymentMissingIds) {
     try {
       const payment = await Payment.findByPk(id);
       const invoice = await Invoice.findByPk(payment.invoice_id);
@@ -105,6 +169,7 @@ async function main() {
   }
 
   console.log(`\nCreated ${ok} entries (expenses + payments only; invoices were not touched).`);
+  console.log(`Payments AMBIGUOUS (still unrepaired, need review): ${paymentAmbiguous.length}`);
   if (failures.length) {
     console.log(`${failures.length} failed:`);
     failures.forEach((f) => console.log('  ' + f));
