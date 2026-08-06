@@ -157,6 +157,12 @@ class JournalEntryService {
       where: {
         source_type: 'payment',
         description: { [Op.iLike]: `%${invoice.invoice_number}%` },
+        // Unlike deleteAutoEntriesForSource, this method matches on a
+        // description substring rather than an exact source_id, so it is
+        // reachable by a manually-created entry (POST /journal-entries
+        // passes source_type straight through). is_auto: true keeps this
+        // destructive delete scoped to entries this service itself created.
+        is_auto: true,
       },
     });
     for (const entry of entries) {
