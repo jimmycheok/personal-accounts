@@ -284,11 +284,15 @@ Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Add a test script to package.json**
 
-Modify `apps/api/package.json`, replacing the `"lint": "echo 'no lint'"` line's neighbours so `scripts` contains:
+Add a `test` script to the `scripts` block of `apps/api/package.json`:
 
 ```json
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
 ```
+
+Note: `node --test tests/` (a bare directory path) does **not** recurse in this
+environment — it resolves `tests` as a module and fails. Verified on Node 18,
+21, 22 and 23. Use the glob form above.
 
 - [ ] **Step 6: Run via the script**
 
