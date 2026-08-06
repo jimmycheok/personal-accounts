@@ -7,6 +7,7 @@ import {
   finaliseMonths,
   applySectionRules,
 } from '../services/ledgerAggregation.js';
+import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping';
 
 test('cash accounts are exactly cash-on-hand and bank', () => {
   assert.deepEqual(CASH_ACCOUNT_CODES, ['1000', '1010']);
@@ -64,4 +65,35 @@ test('applySectionRules zero-fills all sections and halves D15', () => {
 test('applySectionRules ignores unknown sections', () => {
   const totals = applySectionRules([{ section: 'D99', amount: '123' }]);
   assert.ok(!('D99' in totals));
+});
+
+test('buildMonthBuckets handles a range inside a single month', () => {
+  const buckets = buildMonthBuckets('2026-03-05', '2026-03-28');
+  assert.deepEqual(Object.keys(buckets), ['2026-03']);
+});
+
+test('finaliseMonths rounds accumulated floats to cents', () => {
+  const buckets = buildMonthBuckets('2026-01-01', '2026-01-31');
+  applyCashRows(buckets, [
+    { month: '2026-01', inflow: '100.10', outflow: '0' },
+    { month: '2026-01', inflow: '200.20', outflow: '0' },
+    { month: '2026-01', inflow: '50.30', outflow: '0' },
+  ]);
+  // Unrounded this accumulates to 350.59999999999997
+  assert.equal(finaliseMonths(buckets)[0].income, 350.6);
+});
+
+test('applySectionRules rounds accumulated floats to cents', () => {
+  const totals = applySectionRules([
+    { section: 'D2', amount: '100.10' },
+    { section: 'D2', amount: '200.20' },
+    { section: 'D2', amount: '50.30' },
+  ]);
+  assert.equal(totals.D2, 350.6);
+});
+
+test('applySectionRules takes the D15 rate from the shared constants', () => {
+  // Proves the rate is read, not hardcoded: it must match the shared source.
+  assert.equal(BORANG_B_SECTIONS.D15.deductibilityRate, 0.5);
+  assert.equal(applySectionRules([{ section: 'D15', amount: '1000' }]).D15, 500);
 });

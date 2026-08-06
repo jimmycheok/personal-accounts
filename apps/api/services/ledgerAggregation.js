@@ -5,6 +5,11 @@ import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangB
 // outflow only when the card itself is paid off.
 export const CASH_ACCOUNT_CODES = ['1000', '1010'];
 
+// Accumulating floats drifts (100.10 + 200.20 + 50.30 === 350.59999999999997),
+// so every figure this module returns is rounded to cents at the boundary.
+// Accumulation stays full-precision; only the returned value is rounded.
+const toCents = (n) => Math.round(n * 100) / 100;
+
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 export function buildMonthBuckets(from, to) {
@@ -35,7 +40,12 @@ export function applyCashRows(buckets, rows) {
 export function finaliseMonths(buckets) {
   return Object.keys(buckets)
     .sort((a, b) => a.localeCompare(b))
-    .map((k) => ({ ...buckets[k], net: buckets[k].income - buckets[k].expenses }));
+    .map((k) => ({
+      ...buckets[k],
+      income: toCents(buckets[k].income),
+      expenses: toCents(buckets[k].expenses),
+      net: toCents(buckets[k].income - buckets[k].expenses),
+    }));
 }
 
 export function applySectionRules(sectionRows) {
@@ -44,9 +54,12 @@ export function applySectionRules(sectionRows) {
 
   for (const row of sectionRows || []) {
     if (!Object.prototype.hasOwnProperty.call(totals, row.section)) continue;
-    let amount = parseFloat(row.amount || 0);
-    if (row.section === 'D15') amount *= 0.5; // Entertainment is 50% deductible
-    totals[row.section] += amount;
+    // Partial deductibility (D15 Entertainment at 50%) is defined once, in the
+    // shared constants, so a rate change there takes effect everywhere.
+    const rate = BORANG_B_SECTIONS[row.section]?.deductibilityRate ?? 1;
+    totals[row.section] += parseFloat(row.amount || 0) * rate;
   }
+
+  for (const sec of Object.keys(totals)) totals[sec] = toCents(totals[sec]);
   return totals;
 }
