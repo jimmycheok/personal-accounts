@@ -37,9 +37,25 @@ docker-compose up --build
 ```bash
 npx sequelize-cli db:migrate              # run pending migrations
 npx sequelize-cli db:migrate:undo         # rollback last migration
-npx sequelize-cli db:seed:all             # seed expense categories (D1-D20)
+npx sequelize-cli db:seed:all             # FRESH/EMPTY DB ONLY — see warning below
 npx sequelize-cli db:seed:undo:all        # unseed
+
+# On a database that already has data, seed ONE seeder by name:
+npx sequelize-cli db:seed --seed 20260806000001-non-deductible-account.cjs
+npx sequelize-cli db:seed --seed 20260806000002-mileage-claim-account.cjs
 ```
+
+> **Never run `db:seed:all` against a populated database.** `seederStorage` is not
+> configured, so sequelize-cli does not track which seeders have run and `db:seed:all`
+> re-runs **every** seeder. `20260327000002-retroactive-journal-entries.cjs` does raw
+> `INSERT INTO journal_entries` with no existence guard, so a second run duplicates every
+> journal entry — which, since v2.4, doubles every figure on cash flow, the dashboard and
+> Borang B. The account seeders (`6995`, `6410`) are individually guarded and safe to
+> re-run; the retroactive one is not.
+>
+> Both account seeders are **deployment prerequisites**: ship them before the code that
+> depends on them, or `getAccountByCode` throws on every non-deductible expense (`6995`)
+> and every mileage log (`6410`).
 
 ### Web build
 ```bash
