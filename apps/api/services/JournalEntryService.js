@@ -128,6 +128,73 @@ class JournalEntryService {
     }
   }
 
+  // ── Detect non-default accounts before an automatic repost ──────────
+  /**
+   * Returns the sorted, de-duplicated account codes used by the posted
+   * auto-entries for a source. Callers use this to detect whether an entry
+   * was originally posted with non-default accounts (e.g. reviewed and
+   * edited in GLReviewModal) before deciding whether an automatic repost —
+   * which always uses hardcoded default accounts — is safe, or would
+   * silently discard the user's reviewed choice.
+   */
+  async getAutoEntryAccountCodes(sourceType, sourceId) {
+    const entries = await JournalEntry.findAll({
+      where: { source_type: sourceType, source_id: sourceId, is_auto: true },
+      include: [{ model: JournalEntryLine, as: 'lines', include: [{ model: Account, as: 'account' }] }],
+    });
+    const codes = new Set();
+    for (const entry of entries) {
+      for (const line of entry.lines || []) {
+        if (line.account?.code) codes.add(line.account.code);
+      }
+    }
+    return [...codes].sort();
+  }
+
+  // ── Payment entries for an invoice (id-namespace-safe) ───────────────
+  /**
+   * Deletes every journal_entries row with source_type='payment' that
+   * belongs to this invoice — both a markPaid fallback entry (which stores
+   * sourceId = invoice.id) and any entries created from real Payment rows
+   * (sourceId = payment.id). Those two id spaces collide (invoice ids and
+   * payment ids are drawn from separate sequences that can produce the same
+   * number — see Amendment B / the backfill script's `classifyPayments`),
+   * so `source_id = invoice.id` alone is not a safe filter: it could delete
+   * an unrelated payment's entry that happens to share the id, or miss this
+   * invoice's own payments (whose entries are keyed by payment.id, not
+   * invoice.id).
+   *
+   * Disambiguate the same way the backfill script does: every entry this
+   * codebase creates for a payment names the invoice in its description
+   * ("Payment received for INV-0002" / "Full payment for INV-0002"), so an
+   * entry belongs to this invoice only if its description contains this
+   * invoice's own invoice_number. Invoice numbers are fixed-width
+   * (`INV-` + 4 digits) under normal use, so substring collisions between
+   * different invoice numbers are not expected — same caveat already
+   * accepted for the backfill script if a custom invoice_number is ever
+   * imported.
+   */
+  async deletePaymentEntriesForInvoice(invoice) {
+    if (!invoice.invoice_number) return 0;
+    const entries = await JournalEntry.findAll({
+      where: {
+        source_type: 'payment',
+        description: { [Op.iLike]: `%${invoice.invoice_number}%` },
+        // Unlike deleteAutoEntriesForSource, this method matches on a
+        // description substring rather than an exact source_id, so it is
+        // reachable by a manually-created entry (POST /journal-entries
+        // passes source_type straight through). is_auto: true keeps this
+        // destructive delete scoped to entries this service itself created.
+        is_auto: true,
+      },
+    });
+    for (const entry of entries) {
+      await JournalEntryLine.destroy({ where: { journal_entry_id: entry.id } });
+      await entry.destroy();
+    }
+    return entries.length;
+  }
+
   // ── Auto-entry trigger methods ───────────────────────────────────────
 
   async onInvoiceSent(invoice) {
@@ -163,38 +230,61 @@ class JournalEntryService {
     });
   }
 
+  /**
+   * The account an expense's debit line would use, given its own
+   * is_tax_deductible flag and category. Factored out of onExpenseCreated
+   * so a caller (e.g. expensesController.update, Fix E) can compute what
+   * the "default" account *would* be for a given expense snapshot without
+   * actually posting, in order to tell a default posting apart from one
+   * that was reviewed and customised in GLReviewModal.
+   */
+  async resolveExpenseDebitAccount(expense) {
+    // Not claimable against tax → 6995, which carries no Borang B section so
+    // GL-sourced tax queries skip it while P&L still reports it.
+    if (expense.is_tax_deductible === false) {
+      return this.getAccountByCode('6995');
+    }
+    const category = expense.category || (expense.getCategory ? await expense.getCategory() : null);
+    return category?.borang_b_section
+      ? this.getExpenseAccountBySection(category.borang_b_section)
+      : this.getAccountByCode('6999'); // Other Expenses (D20)
+  }
+
   async onExpenseCreated(expense) {
     const amount = parseFloat(expense.amount_myr || expense.amount);
     if (amount <= 0) return;
 
-    // Look up the GL account via the category's borang_b_section
-    const category = expense.category || await expense.getCategory();
-    if (!category || !category.borang_b_section) {
-      // Non-deductible or uncategorised — use Other Expenses (D20)
-      const account = await this.getAccountByCode('6999');
-      await this.createAutoEntry({
-        entryDate: expense.expense_date,
-        description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
-        lines: [
-          { accountId: account.id, debit: amount, credit: 0, description: expense.description || expense.vendor_name },
-          { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
-        ],
-        sourceType: 'expense',
-        sourceId: expense.id,
-      });
-      return;
-    }
+    // The Expense model carries no payment-method field, so expenses always
+    // credit the bank account. Cash-paid expenses can be reclassified via a
+    // manual journal entry if that ever matters.
+    const narration = expense.description || expense.vendor_name || 'Expense';
+    const debitAccount = await this.resolveExpenseDebitAccount(expense);
 
-    const expenseAccount = await this.getExpenseAccountBySection(category.borang_b_section);
     await this.createAutoEntry({
       entryDate: expense.expense_date,
       description: `Expense: ${expense.vendor_name || 'Unknown vendor'}`,
       lines: [
-        { accountId: expenseAccount.id, debit: amount, credit: 0, description: expense.description || expense.vendor_name },
+        { accountId: debitAccount.id, debit: amount, credit: 0, description: narration },
         { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
       ],
       sourceType: 'expense',
       sourceId: expense.id,
+    });
+  }
+
+  async onMileageLogged(log) {
+    const amount = parseFloat(log.deductible_amount);
+    if (amount <= 0) return;
+
+    await this.createAutoEntry({
+      entryDate: log.log_date,
+      description: `Mileage: ${log.from_location || ''} → ${log.to_location || ''} (${log.km} km)`,
+      lines: [
+        { accountCode: '6400', debit: amount, credit: 0, description: 'Motor vehicle expense (mileage)' },
+        { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
+      ],
+      sourceType: 'mileage',
+      sourceId: log.id,
     });
   }
 
@@ -216,6 +306,11 @@ class JournalEntryService {
 
   async onInvoiceVoided(invoice) {
     await this.deleteAutoEntriesForSource('invoice', invoice.id);
+    // A previously-paid invoice being voided also has a payment inflow entry
+    // (source_type='payment') that must go with it, or it survives as a
+    // phantom cash inflow. See deletePaymentEntriesForInvoice for why this
+    // can't just be deleteAutoEntriesForSource('payment', invoice.id).
+    await this.deletePaymentEntriesForInvoice(invoice);
   }
 
   async onPaymentDeleted(payment) {

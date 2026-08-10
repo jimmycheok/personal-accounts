@@ -1,7 +1,9 @@
-import { Op, fn, col, literal } from 'sequelize';
+import { Op } from 'sequelize';
 import { Invoice, Expense, Customer, MileageLog } from '../models/index.js';
 import TaxCalculator from '../services/TaxCalculator.js';
 import CashFlowService from '../services/CashFlowService.js';
+import LedgerQueryService from '../services/LedgerQueryService.js';
+import { ymd } from '../services/ledgerAggregation.js';
 
 function getPeriodDates(period = 'month') {
   const now = new Date();
@@ -21,18 +23,21 @@ function getPeriodDates(period = 'month') {
 export async function overview(req, res, next) {
   try {
     const [from, to] = getPeriodDates(req.query.period);
+    const fromDate = ymd(from);
+    const toDate = ymd(to);
 
-    const [totalIncome, totalExpenses, totalOutstanding, invoiceCount] = await Promise.all([
-      Invoice.sum('total', { where: { status: 'paid', paid_at: { [Op.between]: [from, to] } } }),
-      Expense.sum('amount_myr', { where: { expense_date: { [Op.between]: [from.toISOString().split('T')[0], to.toISOString().split('T')[0]] } } }),
+    // Income and expenses come from the ledger so payment vouchers and any
+    // other posted entry are included, not just the invoices/expenses tables.
+    const [cash, totalOutstanding, invoiceCount] = await Promise.all([
+      LedgerQueryService.getCashTotals(fromDate, toDate),
       Invoice.sum('amount_due', { where: { status: { [Op.in]: ['sent', 'overdue'] } } }),
-      Invoice.count({ where: { issue_date: { [Op.between]: [from.toISOString().split('T')[0], to.toISOString().split('T')[0]] } } }),
+      Invoice.count({ where: { issue_date: { [Op.between]: [fromDate, toDate] } } }),
     ]);
 
     res.json({
-      totalIncome: totalIncome || 0,
-      totalExpenses: totalExpenses || 0,
-      netProfit: (totalIncome || 0) - (totalExpenses || 0),
+      totalIncome: cash.income,
+      totalExpenses: cash.expenses,
+      netProfit: cash.income - cash.expenses,
       totalOutstanding: totalOutstanding || 0,
       invoiceCount: invoiceCount || 0,
       period: req.query.period || 'month',
@@ -98,7 +103,7 @@ export async function upcomingDeadlines(req, res, next) {
     const upcoming = await Invoice.findAll({
       where: {
         status: 'sent',
-        due_date: { [Op.between]: [today.toISOString().split('T')[0], in30Days.toISOString().split('T')[0]] },
+        due_date: { [Op.between]: [ymd(today), ymd(in30Days)] },
       },
       include: [{ model: Customer, as: 'customer', attributes: ['name'] }],
       order: [['due_date', 'ASC']],

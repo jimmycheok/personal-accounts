@@ -1,7 +1,8 @@
 import { Op } from 'sequelize';
-import { Invoice, InvoiceItem, Expense, ExpenseCategory, MileageLog } from '../models/index.js';
+import { Invoice, InvoiceItem, MileageLog } from '../models/index.js';
 import { calculateTax, STANDARD_RELIEFS } from '@personal-accountant/shared/constants/taxBrackets';
 import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping';
+import LedgerQueryService from './LedgerQueryService.js';
 
 class TaxCalculator {
   /**
@@ -24,36 +25,17 @@ class TaxCalculator {
   }
 
   /**
-   * Get expenses grouped by Borang B section for a tax year
+   * Deductible expenses grouped by Borang B section, read from the general
+   * ledger so payment vouchers and journal entries count alongside expenses.
+   * Accounts with no borang_b_section (6995 Non-Deductible) are excluded.
+   * D15 Entertainment is halved by applySectionRules.
    */
   async getExpensesBySection(year) {
-    const startDate = `${year}-01-01`;
-    const endDate = `${year}-12-31`;
-
-    const expenses = await Expense.findAll({
-      where: {
-        expense_date: { [Op.between]: [startDate, endDate] },
-        is_tax_deductible: true,
-      },
-      include: [{ model: ExpenseCategory, as: 'category' }],
-    });
-
-    const sectionTotals = {};
-    Object.keys(BORANG_B_SECTIONS).forEach(sec => { sectionTotals[sec] = 0; });
-
-    expenses.forEach(exp => {
-      const section = exp.category?.borang_b_section;
-      if (!section || !sectionTotals.hasOwnProperty(section)) return;
-
-      let amount = parseFloat(exp.amount_myr || exp.amount);
-
-      // D15 (Entertainment) — 50% deductibility
-      if (section === 'D15') amount = amount * 0.5;
-
-      sectionTotals[section] += amount;
-    });
-
-    return { expenses, sectionTotals };
+    const sectionTotals = await LedgerQueryService.getExpensesBySection(
+      `${year}-01-01`,
+      `${year}-12-31`,
+    );
+    return { sectionTotals };
   }
 
   /**
@@ -68,15 +50,34 @@ class TaxCalculator {
   }
 
   /**
-   * Generate full Borang B data for a year
+   * Generate full Borang B data for a year.
+   *
+   * Income is now GL-sourced (accrual), not the `invoices.paid_at`
+   * cash-received figure `getIncomeForYear` returns. Two reasons:
+   *   1. A manual journal entry crediting 4000 (Sales Revenue) counted in
+   *      the P&L but not here, while a manual entry debiting an expense
+   *      account counted as a deduction here — the two sides disagreed.
+   *   2. `paid_at` is a timestamp compared against plain 'Y-01-01'/'Y-12-31'
+   *      strings (no time component), so an invoice paid on Dec 31 could
+   *      fall outside the range depending on time-of-day, while
+   *      `/taxation/income-summary` handles that boundary correctly with
+   *      `T23:59:59`. GL entry_date is a DATEONLY column compared with
+   *      BETWEEN, which has no such boundary problem.
+   * `getIncomeForYear` is still called for `partB.invoiceCount` (display
+   * metadata only — not used in the tax calculation below).
    */
   async generateBorangBData(year) {
-    const { totalIncome, invoices } = await this.getIncomeForYear(year);
+    const { invoices } = await this.getIncomeForYear(year);
+    const totalIncome = await LedgerQueryService.getIncomeTotal(`${year}-01-01`, `${year}-12-31`);
     const { sectionTotals } = await this.getExpensesBySection(year);
     const { totalKm, deductibleAmount: mileageDeduction } = await this.getMileageDeduction(year);
 
-    // Add mileage to D5 (motor vehicle)
-    sectionTotals['D5'] = (sectionTotals['D5'] || 0) + mileageDeduction;
+    // The GL is authoritative: mileage logs post their own journal entry
+    // (debit 6400 Motor Vehicle Expenses, which carries borang_b_section
+    // 'D5'), so getExpensesBySection already includes mileage. Adding
+    // mileageDeduction here would double-count it under a different rate.
+    // `mileage` below is reported for display only — it is NOT added into
+    // sectionTotals.
 
     const totalExpenses = Object.values(sectionTotals).reduce((sum, v) => sum + v, 0);
     const grossProfit = totalIncome - totalExpenses;

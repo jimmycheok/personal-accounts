@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.bak
+.env.*.bak
 dist/
 build/
 *.log
@@ -8,3 +10,12 @@ uploads/
 .turbo/
 .cache/
 coverage/
+
+# session-local docker port overrides (not for commit)
+docker-compose.override.yml
+
+# Playwright E2E (apps/web)
+test-results/
+playwright-report/
+blob-report/
+.auth/

@@ -5,6 +5,12 @@ import PdfService from '../services/PdfService.js';
 import DuitNowService from '../services/DuitNowService.js';
 import MyInvoisService from '../services/MyInvoisService.js';
 import JournalEntryService from '../services/JournalEntryService.js';
+import { ymd } from '../services/ledgerAggregation.js';
+
+// The default repost path (JournalEntryService.onInvoiceSent) always posts
+// to these two accounts. Used to detect whether an invoice's existing entry
+// was posted with non-default accounts before an automatic repost (Fix E).
+const DEFAULT_INVOICE_SENT_CODES = ['1100', '4000'];
 
 function recalcTotals(items) {
   let subtotal = 0, taxTotal = 0;
@@ -105,6 +111,7 @@ export async function update(req, res, next) {
 
     const { items, ...invoiceData } = req.body;
     const before = invoice.toJSON();
+    const wasPostedToGl = invoice.status !== 'draft'; // 'sent' / 'overdue' already have an onInvoiceSent entry
 
     if (items) {
       await InvoiceItem.destroy({ where: { invoice_id: invoice.id } });
@@ -114,7 +121,66 @@ export async function update(req, res, next) {
     }
 
     await invoice.update(invoiceData);
-    await writeAuditLog({ action: 'update', subjectType: 'Invoice', subjectId: invoice.id, before, after: invoice.toJSON() });
+
+    // The GL is the source of truth for cash flow, dashboard and tax. An
+    // invoice that was already sent/overdue has a stale AR/revenue entry
+    // (posted at the old total) — if the total actually changed, replace
+    // it: delete the old auto-entry and repost from the updated invoice. A
+    // still-draft invoice has no entry yet and needs none here.
+    //
+    // Fix E: the default repost (onInvoiceSent) always uses accounts
+    // 1100/4000. If the existing entry was originally posted through
+    // GLReviewModal with different accounts, blindly reposting would
+    // silently discard the user's reviewed choice. Detect that case first
+    // and skip the automatic repost — log loudly so the entry gets manual
+    // review instead of a silent account reversion.
+    let glRepostSkippedReason = null;
+    if (wasPostedToGl && parseFloat(before.total) !== parseFloat(invoice.total)) {
+      const existingCodes = await JournalEntryService.getAutoEntryAccountCodes('invoice', invoice.id);
+      const usesDefaultAccounts =
+        existingCodes.length === 0 ||
+        (existingCodes.length === DEFAULT_INVOICE_SENT_CODES.length &&
+          existingCodes.every((c) => DEFAULT_INVOICE_SENT_CODES.includes(c)));
+
+      if (!usesDefaultAccounts) {
+        glRepostSkippedReason =
+          `existing entry uses non-default accounts (${existingCodes.join(', ')}); ` +
+          `total changed from ${before.total} to ${invoice.total} but the journal entry was NOT updated`;
+        console.error(`GL repost skipped for invoice ${invoice.id}: ${glRepostSkippedReason}. Needs manual review.`);
+      } else {
+        try {
+          await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+          await JournalEntryService.onInvoiceSent(invoice);
+        } catch (err) {
+          // Fix F: the record's fields are already persisted at this point
+          // (invoice.update already committed above). Audit that change
+          // even though the GL repost failed, so the mismatch is recorded
+          // instead of silently persisted-but-unaudited.
+          await writeAuditLog({
+            action: 'update',
+            subjectType: 'Invoice',
+            subjectId: invoice.id,
+            before,
+            after: invoice.toJSON(),
+            meta: { gl_repost_failed: true, error: err.message },
+          });
+          console.error(
+            `GL repost failed for invoice ${invoice.id} after an edit — record may have no journal entry:`,
+            err.message,
+          );
+          throw err;
+        }
+      }
+    }
+
+    await writeAuditLog({
+      action: 'update',
+      subjectType: 'Invoice',
+      subjectId: invoice.id,
+      before,
+      after: invoice.toJSON(),
+      ...(glRepostSkippedReason ? { meta: { gl_repost_skipped: true, reason: glRepostSkippedReason } } : {}),
+    });
     res.json(await Invoice.findByPk(invoice.id, { include: ['items', 'customer'] }));
   } catch (err) {
     next(err);
@@ -137,15 +203,37 @@ export async function send(req, res, next) {
   try {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const prev = { status: invoice.status, sent_at: invoice.sent_at };
     await invoice.update({ status: 'sent', sent_at: new Date() });
-    if (req.body.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: invoice.issue_date,
-        description: `Invoice ${invoice.invoice_number} issued`,
-        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'invoice',
-        sourceId: invoice.id,
-      });
+    // The GL is the source of truth for cash flow, dashboard and tax, so an
+    // invoice must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them. If the GL post fails, undo
+    // the status change so we never leave a "sent" invoice without an entry.
+    try {
+      if (req.body.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: invoice.issue_date,
+          description: `Invoice ${invoice.invoice_number} issued`,
+          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'invoice',
+          sourceId: invoice.id,
+        });
+      } else {
+        await JournalEntryService.onInvoiceSent(invoice);
+      }
+    } catch (err) {
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await invoice.update(prev);
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for invoice ${invoice.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
+      throw err;
     }
     await writeAuditLog({ action: 'send', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
@@ -158,15 +246,45 @@ export async function markPaid(req, res, next) {
   try {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const prev = {
+      status: invoice.status,
+      paid_at: invoice.paid_at,
+      amount_paid: invoice.amount_paid,
+      amount_due: invoice.amount_due,
+    };
     await invoice.update({ status: 'paid', paid_at: new Date(), amount_paid: invoice.total, amount_due: 0 });
-    if (req.body.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: new Date().toISOString().split('T')[0],
-        description: `Full payment for ${invoice.invoice_number}`,
-        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'payment',
-        sourceId: invoice.id,
-      });
+    // The GL is the source of truth for cash flow, dashboard and tax, so an
+    // invoice must never exist without an entry. Use the client's reviewed
+    // lines when present, otherwise derive them. If the GL post fails, undo
+    // the paid status so we never leave a "paid" invoice without an entry.
+    try {
+      if (req.body.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: ymd(new Date()),
+          description: `Full payment for ${invoice.invoice_number}`,
+          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'payment',
+          sourceId: invoice.id,
+        });
+      } else {
+        await JournalEntryService.onPaymentReceived(
+          { id: invoice.id, amount: invoice.total, payment_date: invoice.paid_at || new Date(), method: 'bank_transfer' },
+          invoice,
+        );
+      }
+    } catch (err) {
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await invoice.update(prev);
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for invoice ${invoice.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
+      throw err;
     }
     await writeAuditLog({ action: 'mark_paid', subjectType: 'Invoice', subjectId: invoice.id });
     res.json(invoice);
@@ -181,10 +299,23 @@ export async function voidInvoice(req, res, next) {
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     await invoice.update({ status: 'void', void_reason: req.body.reason });
     if (req.body.journal_lines?.length) {
-      // Delete previous auto-entries for this invoice and create reversal
-      await JournalEntryService.deleteAutoEntriesForSource('invoice', invoice.id);
+      // Posted ledger entries are reversed, not deleted: the original
+      // invoice entry (+total to revenue) stays, and the reversal the user
+      // reviewed in GLReviewModal (-total) is posted alongside it, netting
+      // to zero with a correct audit trail. Deleting the original here was
+      // a bug — the reversal's default template already debits 4000 by
+      // total, so deleting the original AND posting the reversal drove
+      // revenue by -total instead of 0 (see final-round-report.md Fix A).
+      //
+      // The payment inflow entry (if the invoice had been paid) is still
+      // deleted outright — that one is a phantom cash inflow for money
+      // never received, not a posted revenue event, so there is nothing to
+      // reverse (see JournalEntryService.deletePaymentEntriesForInvoice for
+      // why a plain deleteAutoEntriesForSource('payment', invoice.id) is
+      // not safe).
+      await JournalEntryService.deletePaymentEntriesForInvoice(invoice);
       await JournalEntryService.createAutoEntry({
-        entryDate: new Date().toISOString().split('T')[0],
+        entryDate: ymd(new Date()),
         description: `Void invoice ${invoice.invoice_number}`,
         lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
         sourceType: 'invoice',
@@ -218,7 +349,7 @@ export async function duplicate(req, res, next) {
       paid_at: null,
       amount_paid: 0,
       amount_due: invoice.total,
-      issue_date: new Date().toISOString().split('T')[0],
+      issue_date: ymd(new Date()),
       einvoice_long_id: null,
       createdAt: undefined,
       updatedAt: undefined,

@@ -58,14 +58,36 @@ router.post('/', async (req, res, next) => {
       notes,
     });
 
-    if (req.body.journal_lines?.length) {
-      await JournalEntryService.createAutoEntry({
-        entryDate: log_date,
-        description: `Mileage: ${from_location} → ${to_location} (${km} km)`,
-        lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-        sourceType: 'mileage',
-        sourceId: log.id,
-      });
+    // The GL is the source of truth for cash flow, dashboard and tax, so a
+    // mileage log must never exist without an entry. Use the client's
+    // reviewed lines when present, otherwise derive them. If the GL post
+    // fails, the log must not survive either — compensate by destroying it
+    // so we never leave a record without a matching journal entry.
+    try {
+      if (req.body.journal_lines?.length) {
+        await JournalEntryService.createAutoEntry({
+          entryDate: log_date,
+          description: `Mileage: ${from_location} → ${to_location} (${km} km)`,
+          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
+          sourceType: 'mileage',
+          sourceId: log.id,
+        });
+      } else {
+        await JournalEntryService.onMileageLogged(log);
+      }
+    } catch (err) {
+      // The original GL error is the real cause and must survive. A failed cleanup
+      // is logged loudly instead: that record now has no journal entry and will
+      // need the backfill script.
+      try {
+        await log.destroy();
+      } catch (cleanupErr) {
+        console.error(
+          `GL rollback failed for mileage log ${log.id} — record may have no journal entry:`,
+          cleanupErr.message,
+        );
+      }
+      throw err;
     }
 
     res.status(201).json(log);

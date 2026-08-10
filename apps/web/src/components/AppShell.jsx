@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import logo from '../assets/logo.svg';
 import {
   Header,
   HeaderName,
   HeaderGlobalBar,
   HeaderGlobalAction,
+  HeaderMenuButton,
   SideNav,
   SideNavItems,
   SideNavLink,
@@ -32,6 +33,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 import OCRAssistantModal from './OCRAssistantModal.jsx';
 import AddExpenseModal from './AddExpenseModal.jsx';
 
+// Matches Carbon's own `lg` breakpoint (66rem / 1056px) — the width above
+// which Carbon's UI Shell keeps the side nav permanently visible and below
+// which it collapses to a hamburger-triggered overlay.
+const LARGE_SCREEN_QUERY = '(min-width: 66rem)';
+
 export default function AppShell({ children }) {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -40,6 +46,25 @@ export default function AppShell({ children }) {
   const [ocrOpen, setOcrOpen] = useState(false);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [expensePrefill, setExpensePrefill] = useState(null);
+
+  // Large screens: side nav is always expanded (today's behaviour, content
+  // offset). Small screens: side nav starts closed and the user toggles it
+  // via the hamburger button; when open it overlays content rather than
+  // displacing it.
+  const [isLargeScreen, setIsLargeScreen] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(LARGE_SCREEN_QUERY).matches
+  );
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isSideNavExpanded = isLargeScreen || mobileNavOpen;
+
+  useEffect(() => {
+    const mql = window.matchMedia(LARGE_SCREEN_QUERY);
+    const handleChange = (event) => setIsLargeScreen(event.matches);
+    mql.addEventListener('change', handleChange);
+    return () => mql.removeEventListener('change', handleChange);
+  }, []);
+
+  const closeMobileNav = () => setMobileNavOpen(false);
 
   const isActive = (path) => location.pathname.startsWith(path);
 
@@ -71,6 +96,11 @@ export default function AppShell({ children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Header aria-label="Personal Accountant">
+        <HeaderMenuButton
+          aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+          isActive={mobileNavOpen}
+          onClick={() => setMobileNavOpen((open) => !open)}
+        />
         <HeaderName href="/" prefix="">
           <img src={logo} alt="" width="24" height="24" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
           Personal Accountant
@@ -93,11 +123,14 @@ export default function AppShell({ children }) {
         </HeaderGlobalBar>
       </Header>
 
-      <div style={{ display: 'flex', flex: 1, marginTop: '3rem' }}>
+      <div style={{ display: 'flex', flex: 1, marginTop: '3rem', minWidth: 0 }}>
         <SideNav
           aria-label="Side navigation"
-          expanded={true}
-          isFixedNav
+          expanded={isSideNavExpanded}
+          isPersistent={false}
+          onToggle={(_event, value) => setMobileNavOpen(value)}
+          onOverlayClick={closeMobileNav}
+          onSideNavBlur={closeMobileNav}
           href="#main-content"
         >
           <SideNavItems>
@@ -107,7 +140,11 @@ export default function AppShell({ children }) {
                 renderIcon={item.icon}
                 isActive={isActive(item.path)}
                 href={item.path}
-                onClick={(e) => { e.preventDefault(); navigate(item.path); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(item.path);
+                  if (!isLargeScreen) closeMobileNav();
+                }}
               >
                 {item.label}
               </SideNavLink>
@@ -118,8 +155,9 @@ export default function AppShell({ children }) {
         <main
           id="main-content"
           style={{
-            marginLeft: '16rem',
+            marginLeft: isLargeScreen ? '16rem' : 0,
             flex: 1,
+            minWidth: 0,
             padding: '2rem',
             backgroundColor: '#f4f4f4',
             minHeight: 'calc(100vh - 3rem)',

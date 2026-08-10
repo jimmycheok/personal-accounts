@@ -1,5 +1,7 @@
 import { Op } from 'sequelize';
-import { Invoice, Expense, RecurringTemplate, CashFlowProjection } from '../models/index.js';
+import { Invoice, RecurringTemplate, CashFlowProjection } from '../models/index.js';
+import LedgerQueryService from './LedgerQueryService.js';
+import { ymd } from './ledgerAggregation.js';
 
 class CashFlowService {
   async getProjection(months = 6) {
@@ -21,7 +23,7 @@ class CashFlowService {
       const outstanding = await Invoice.findAll({
         where: {
           status: { [Op.in]: ['sent', 'overdue'] },
-          due_date: { [Op.between]: [monthStart.toISOString().split('T')[0], monthEnd.toISOString().split('T')[0]] },
+          due_date: { [Op.between]: [ymd(monthStart), ymd(monthEnd)] },
         },
         attributes: ['amount_due'],
       });
@@ -46,24 +48,12 @@ class CashFlowService {
 
       // Actual data for past months
       if (monthEnd < today) {
-        const paidInvoices = await Invoice.findAll({
-          where: {
-            status: 'paid',
-            paid_at: { [Op.between]: [monthStart, monthEnd] },
-          },
-          attributes: ['total'],
-        });
-        actualIncome = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || 0), 0);
-
-        const paidExpenses = await Expense.findAll({
-          where: {
-            expense_date: {
-              [Op.between]: [monthStart.toISOString().split('T')[0], monthEnd.toISOString().split('T')[0]],
-            },
-          },
-          attributes: ['amount_myr', 'amount'],
-        });
-        actualExpenses = paidExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount_myr || exp.amount || 0), 0);
+        const totals = await LedgerQueryService.getCashTotals(
+          ymd(monthStart),
+          ymd(monthEnd),
+        );
+        actualIncome = totals.income;
+        actualExpenses = totals.expenses;
       }
 
       // Update or create projection record
@@ -91,21 +81,11 @@ class CashFlowService {
   }
 
   async getActual(from, to) {
-    const invoices = await Invoice.findAll({
-      where: { status: 'paid', paid_at: { [Op.between]: [from, to] } },
-      attributes: ['total', 'paid_at'],
-    });
-
-    const expenses = await Expense.findAll({
-      where: { expense_date: { [Op.between]: [from, to] } },
-      attributes: ['amount_myr', 'amount', 'expense_date'],
-    });
-
+    const monthly = await LedgerQueryService.getCashFlowByMonth(from, to);
     return {
-      totalIncome: invoices.reduce((s, i) => s + parseFloat(i.total), 0),
-      totalExpenses: expenses.reduce((s, e) => s + parseFloat(e.amount_myr || e.amount), 0),
-      invoices,
-      expenses,
+      totalIncome: monthly.reduce((s, m) => s + m.income, 0),
+      totalExpenses: monthly.reduce((s, m) => s + m.expenses, 0),
+      monthly,
     };
   }
 }

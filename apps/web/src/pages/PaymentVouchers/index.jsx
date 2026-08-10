@@ -8,6 +8,7 @@ import { Add } from '@carbon/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api.js';
 import PaymentVoucherModal from '../../components/PaymentVoucherModal.jsx';
+import ModuleIntro from '../../components/ModuleIntro.jsx';
 
 const STATUS_TAG = { draft: 'gray', approved: 'green', voided: 'red' };
 const titleCase = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -58,8 +59,14 @@ export default function PaymentVouchersPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 400 }}>Payment Vouchers</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 400, margin: 0 }}>Payment Vouchers</h1>
+          <ModuleIntro>
+            Money you paid where <strong>you have to produce the paperwork</strong> — typically a
+            freelancer or contractor with no invoice to give you. Issue a voucher as the record.
+          </ModuleIntro>
+        </div>
         <Button renderIcon={Add} onClick={() => setModalOpen(true)}>New Payment Voucher</Button>
       </div>
 
