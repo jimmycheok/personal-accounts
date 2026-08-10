@@ -28,7 +28,23 @@ export default function PaymentVoucherDetail() {
     catch (err) { setError(err.response?.data?.error || 'Void failed'); }
   };
 
-  const openPdf = () => window.open(`${api.defaults.baseURL}/payment-vouchers/${id}/pdf`, '_blank');
+  // Fetch through axios so the request interceptor attaches the JWT. A plain
+  // window.open() on the API URL is a raw browser navigation that skips the
+  // interceptor entirely, so the server sees no Authorization header and
+  // returns {"error":"No token provided"}.
+  const downloadPdf = async () => {
+    try {
+      const res = await api.get(`/payment-vouchers/${id}/pdf`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${voucher.pv_number || 'payment-voucher'}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to download voucher PDF');
+    }
+  };
 
   if (!voucher) {
     return <div>{error ? <InlineNotification kind="error" title={error} /> : 'Loading...'}</div>;
@@ -46,7 +62,7 @@ export default function PaymentVoucherDetail() {
           <Tag type={STATUS_TAG[voucher.status] || 'gray'}>{titleCase(voucher.status)}</Tag>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {voucher.status === 'approved' && <Button kind="secondary" renderIcon={DocumentIcon} onClick={openPdf}>PDF</Button>}
+          {voucher.status === 'approved' && <Button kind="secondary" renderIcon={DocumentIcon} onClick={downloadPdf}>PDF</Button>}
           {voucher.status === 'approved' && <Button kind="danger--tertiary" renderIcon={Close} onClick={handleVoid}>Void</Button>}
         </div>
       </div>
