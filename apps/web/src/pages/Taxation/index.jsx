@@ -101,6 +101,20 @@ export default function TaxationPage() {
 
       {error && <InlineNotification kind="error" title={error} style={{ marginBottom: '1rem' }} />}
 
+      {yearData?.borangB?.mileageOverlapMonths?.length > 0 && (
+        <InlineNotification
+          kind="warning"
+          lowContrast
+          title="Possible double-claimed vehicle costs"
+          subtitle={`Both fuel/maintenance receipts and mileage claims were recorded in ${yearData.borangB.mileageOverlapMonths.map(m => {
+            const [y, mo] = m.month.split('-').map(Number);
+            return new Date(y, mo - 1, 1).toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+          }).join(', ')}. A per-km mileage claim substitutes for actual vehicle costs — claiming both for the same trip would deduct it twice. Review D5 before filing.`}
+          style={{ marginBottom: '1rem' }}
+          hideCloseButton
+        />
+      )}
+
       <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
         <Tile style={{ padding: '1.5rem' }}>
           <h4 style={{ fontWeight: 600, color: '#525252', marginBottom: '1rem' }}>Business Income Summary ({year})</h4>
