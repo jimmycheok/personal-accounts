@@ -31,7 +31,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Income (Part B) and deductible expenses by Borang B section (Part D) are both read from the General Ledger, so every module that posts a journal entry — including Payment Vouchers — is counted
 - Income is recognised on an **accrual** basis (revenue accounts), not cash received
 - Expenses posted to accounts with no Borang B section (e.g. `6995` Non-Deductible Expenses) are excluded from Part D while still appearing in Profit & Loss
-- Mileage logs contribute to D5 via their journal entry (DR `6400` Motor Vehicle Expenses)
+- Mileage logs contribute to D5 via their journal entry (DR `6410` Mileage Claim), kept separate from actual vehicle receipts (`6400` Motor Vehicle Expenses) so a trip claimed under both bases is visible — see "Mileage log" below
 - Personal relief inputs (EPF, medical, education, dependants, etc.) applied to arrive at chargeable income
 - Progressive tax brackets for AY2024/2025 with a full bracket breakdown
 - Exports a formatted Borang B summary PDF ready to hand to your tax agent
@@ -67,7 +67,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 
 ### Supporting Tools
 - **Bank reconciliation** — import CSV bank statements and match rows to invoices or expenses
-- **Mileage log** — track business trips; deduction is `km × rate`, defaulting to RM 0.60/km (`MILEAGE_RATE_PER_KM`) and overridable per trip. LHDN's tiered schedule is **not** applied automatically — see Roadmap
+- **Mileage log** — track business trips; deduction is `km × rate`, defaulting to RM 0.60/km (`MILEAGE_RATE_PER_KM`) and overridable per trip. This is the owner's own reasonable per-km estimate, **not** an LHDN-prescribed rate — LHDN publishes no per-km business deduction rate for a sole proprietor (see "Malaysian compliance notes" below). Mileage claims post to account `6410`, separate from actual vehicle receipts (`6400`); a Taxation/Mileage page warning flags months where both were used, since a per-km claim is meant to substitute for actual costs, not add to them
 - **Document storage** — attach PDF and image files to any record; in-app preview for images and PDFs; store locally, on AWS S3, or Google Drive
 - **Recurring templates** — auto-generate repeating invoices or expenses on a schedule
 - **Audit log** — all financial mutations are recorded with before/after snapshots
@@ -258,7 +258,7 @@ cd apps/web && npm run e2e
 | [v2.4](docs/releases/v2.4.md) | 2026-08-10 | GL-sourced cash flow, dashboard & Borang B tax — Payment Vouchers now appear on every money surface; backfill tool; test suites added |
 | [v2.3](docs/releases/v2.3.md) | 2026-07-24 | Payment Voucher module — modal create, service-item lines, GL posting on save, printable PDF |
 | [v2.2](docs/releases/v2.2.md) | 2026-03-30 | Document preview modal, PDF/image-only upload constraint, mileage rounding fix |
-| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage; aligned the frontend mileage rate to the backend's RM 0.60/km (tiering itself still not automated) |
+| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage; aligned the frontend mileage rate to the backend's RM 0.60/km |
 | [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |
 | [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |
 | [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
@@ -271,7 +271,7 @@ cd apps/web && npm run e2e
 
 - **LHDN MyInvois**: Sandbox environment available for testing at `https://preprod-api.myinvois.hasil.gov.my`. Production credentials are configured through the app UI (Settings → E-Invoice), not the `.env` file.
 - **Borang B**: Tax calculations use AY2024/2025 progressive brackets (0%–30%). Tax bracket data lives in `packages/shared/src/constants/taxBrackets.js` and must be updated when LHDN announces changes.
-- **Mileage**: LHDN's approved schedule is tiered — RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter. The app currently applies a **flat** rate per trip (default RM 0.60, configurable via `MILEAGE_RATE_PER_KM` and overridable per entry); the tiering is not yet automated, so verify high-mileage months by hand.
+- **Mileage**: LHDN publishes no per-km mileage rate for a sole proprietor's business deduction. The RM0.60/km-tiered-to-RM0.30-after-200km figure sometimes quoted as "the LHDN mileage rate" is the Malaysian civil service rate (Pekeliling Perbendaharaan) for government staff claiming official travel — it does not apply to private businesses or the self-employed. For a sole proprietor the statutory basis is **actual costs apportioned by business use** under s.33(1) ITA 1967 (fuel, repairs, insurance, road tax, parking), substantiated by a logbook — there is no per-km shortcut. The app's `km × rate` figure (default RM 0.60/km via `MILEAGE_RATE_PER_KM`, overridable per trip) is the owner's own reasonable estimate for that apportionment, not an LHDN-prescribed rate. Because a per-km claim is meant to *substitute* for actual costs rather than add to them, mileage claims post to a separate GL account (`6410`) from actual vehicle receipts (`6400`), and the app warns when both were used in the same month — see Mileage and Taxation pages.
 - **GST/SST**: The system supports per-line tax rates on invoices. No hard-coded tax rate — the business owner sets the applicable rate per line item.
 - **Currency**: All financial records store the original currency and exchange rate alongside an `amount_myr` field for reporting. Reporting and Borang B calculations use the MYR value.
 
@@ -279,7 +279,7 @@ cd apps/web && npm run e2e
 
 ## Roadmap
 
-- [ ] Apply LHDN's tiered mileage schedule automatically (currently a flat per-trip rate)
+- [ ] Support actual-costs-apportioned mileage/vehicle deduction (s.33(1) ITA 1967 basis) as an alternative to the flat per-km estimate
 - [ ] Include the ledger tables (`accounts`, `journal_entries`, `journal_entry_lines`, `payment_vouchers`) in the JSON backup — since v2.4 these hold the money figures
 - [ ] Wire up debit note (`03`) and self-billed (`11`) e-invoice submission
 - [ ] Capital allowance handling for fixed assets (`is_capital_allowance` is stored but not applied)
