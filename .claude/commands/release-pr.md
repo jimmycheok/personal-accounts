@@ -64,7 +64,9 @@ Any steps needed when pulling this release (new env vars, migrations, etc.)
 
 Populate every table from your analysis of the git diff.
 
-### 6. Update README.md
+### 6. Update README.md — MANDATORY
+
+**The README is part of the release, not an optional extra.** A release whose README still describes the previous version is an incomplete release. Never write `docs/releases/vX.Y.md` without updating `README.md` in the same commit.
 
 Read the full `README.md` and compare it against the changes in this release. Update **every section** that is affected by the diff — not just the Releases table. Specifically check and amend:
 
@@ -84,19 +86,58 @@ Read the full `README.md` and compare it against the changes in this release. Up
 
 Also fix any outdated information you noticed while reviewing the diff (e.g. wrong start command, stale counts like "24 tables" or "21 route files", incorrect descriptions).
 
+**Verify every number you write, don't carry the old one forward.** These drift silently and are the most common stale content in the file:
+
+```bash
+ls apps/api/routes/ | wc -l                     # route files
+ls apps/api/migrations/ | wc -l                 # migrations
+grep -c "^  { code:" apps/api/seeders/*chart-of-accounts*.cjs   # seeded accounts
+docker compose exec -T postgres psql -U pa_user -d personal_accountant \
+  -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
+```
+
+### 6b. Verification gate — do not proceed until these pass
+
+Run these checks and fix anything that fails. If a check fails you have not finished step 6:
+
+```bash
+# The README must actually have changed
+git diff --stat -- README.md          # must be non-empty
+
+# The new version must appear in the Releases table
+grep -q "\[vX\.Y\](docs/releases/vX\.Y\.md)" README.md && echo "OK: release row present" \
+  || echo "MISSING: add the vX.Y row to the Releases table"
+
+# Every release file must be linked from the README
+for f in docs/releases/*.md; do
+  v=$(basename "$f" .md)
+  grep -q "$v" README.md || echo "MISSING from README Releases table: $v"
+done
+```
+
+State explicitly in your summary which README sections you changed, and which you deliberately left alone and why. "No README changes needed" is a valid outcome **only** for a release that changes nothing user-visible, no counts, and no routes — say so explicitly rather than staying silent.
+
 ### 7. Commit
 
-Stage and commit **only** the docs changes on the release branch:
+Stage and commit **only** the docs changes on the release branch. `README.md` and `docs/releases/vX.Y.md` must be in the **same commit** — that way they can never drift apart, and a reviewer sees the release notes and the README update together:
 
-```
-docs: release vX.Y — <short title>
+```bash
+git add README.md docs/releases/vX.Y.md docs/development-plan.md
+git commit -m "docs: release vX.Y — <short title>"
 ```
 
 Push the branch.
 
-### 8. Create the PR via GitHub MCP
+### 8. Create the PR
 
-Use the `mcp__github__create_pull_request` tool with:
+Use the `gh` CLI if it is authenticated (`gh auth status`), which is the usual case here:
+
+```bash
+gh pr create --base main --head release/vX.Y \
+  --title "release: vX.Y — <short title>" --body-file <path>
+```
+
+Otherwise use the `mcp__github__create_pull_request` tool with:
 - `owner`: extract from `git remote get-url origin`
 - `repo`: extract from the remote URL
 - `head`: `release/vX.Y`
