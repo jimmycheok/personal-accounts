@@ -16,8 +16,8 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 
 ### LHDN MyInvois E-Invoice Compliance
 - Submit e-invoices to LHDN in UBL JSON format (mandatory for eligible businesses)
-- Supports all four document types: standard invoice (01), credit note (02), debit note (03), and self-billed invoice (11)
-- Consolidated monthly submission for B2C transactions under RM 200
+- Submits standard invoices (type `01`) and credit notes (type `02`). Debit note (`03`) and self-billed (`11`) exist in the submission schema but are not yet wired up — see Roadmap
+- Consolidated monthly submission for B2C transactions under RM 200 (special buyer TIN `EI00000000010`)
 - LHDN QR code embedded on invoice PDF once submission is validated
 - Real-time status polling; cancellation supported within LHDN's 72-hour window
 
@@ -50,7 +50,8 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Record outgoing payments (e.g. freelancer salaries) as formal, numbered payment vouchers (`PV-YYYYMM-NNNN`)
 - Create from a modal with a free-text **service-item** table (item + amount) and staged file attachments
 - On save, the GL Review modal posts a balanced journal entry immediately — defaulting to DR Salaries & Wages (`6100`) / CR the payment-method account (Bank `1010` or Cash `1000`) — and the voucher is marked posted
-- Void reverses the journal entry; printable PDF voucher with amount-in-words and Prepared/Approved/Received signature lines
+- Void reverses the journal entry
+- Downloads a printable PDF voucher (`PV-YYYYMM-NNNN.pdf`) with amount-in-words and Prepared/Approved/Received signature lines
 
 ### GL-Sourced Money Figures (v2.4)
 - Cash Flow, the Dashboard and Borang B tax all read the **General Ledger**, not the `expenses`/`invoices` tables — so Payment Vouchers and manual journal entries appear everywhere, consistently
@@ -61,12 +62,12 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 ### Dashboard & Reporting
 - Financial overview: **Cash In, Cash Out, Net Cash** (cash-basis, from the ledger) and outstanding balance — filterable by month, quarter, or year
 - Upcoming deadlines: overdue invoices, due-soon invoices, and annual Borang B filing reminder (30 April)
-- Cash flow projection: N-month forward view combining outstanding invoices, recurring entries, and historical averages
-- Excel/CSV export for invoices and expenses; full JSON backup and restore
+- Cash flow projection: N-month forward view built from outstanding invoices and active recurring templates
+- Excel/CSV export for invoices and expenses; JSON backup and restore (covers invoices, expenses, customers, payments and mileage — the ledger tables are not yet included, see Roadmap)
 
 ### Supporting Tools
 - **Bank reconciliation** — import CSV bank statements and match rows to invoices or expenses
-- **Mileage log** — track business trips with LHDN tiered deduction calculation (RM 0.60/km first 200 km, RM 0.40/km thereafter)
+- **Mileage log** — track business trips; deduction is `km × rate`, defaulting to RM 0.60/km (`MILEAGE_RATE_PER_KM`) and overridable per trip. LHDN's tiered schedule is **not** applied automatically — see Roadmap
 - **Document storage** — attach PDF and image files to any record; in-app preview for images and PDFs; store locally, on AWS S3, or Google Drive
 - **Recurring templates** — auto-generate repeating invoices or expenses on a schedule
 - **Audit log** — all financial mutations are recorded with before/after snapshots
@@ -257,7 +258,7 @@ cd apps/web && npm run e2e
 | [v2.4](docs/releases/v2.4.md) | 2026-08-10 | GL-sourced cash flow, dashboard & Borang B tax — Payment Vouchers now appear on every money surface; backfill tool; test suites added |
 | [v2.3](docs/releases/v2.3.md) | 2026-07-24 | Payment Voucher module — modal create, service-item lines, GL posting on save, printable PDF |
 | [v2.2](docs/releases/v2.2.md) | 2026-03-30 | Document preview modal, PDF/image-only upload constraint, mileage rounding fix |
-| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage, fix mileage deduction rate to match LHDN tiered schedule |
+| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage; aligned the frontend mileage rate to the backend's RM 0.60/km (tiering itself still not automated) |
 | [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |
 | [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |
 | [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
@@ -270,7 +271,7 @@ cd apps/web && npm run e2e
 
 - **LHDN MyInvois**: Sandbox environment available for testing at `https://preprod-api.myinvois.hasil.gov.my`. Production credentials are configured through the app UI (Settings → E-Invoice), not the `.env` file.
 - **Borang B**: Tax calculations use AY2024/2025 progressive brackets (0%–30%). Tax bracket data lives in `packages/shared/src/constants/taxBrackets.js` and must be updated when LHDN announces changes.
-- **Mileage**: LHDN-approved tiered rate — RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter.
+- **Mileage**: LHDN's approved schedule is tiered — RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter. The app currently applies a **flat** rate per trip (default RM 0.60, configurable via `MILEAGE_RATE_PER_KM` and overridable per entry); the tiering is not yet automated, so verify high-mileage months by hand.
 - **GST/SST**: The system supports per-line tax rates on invoices. No hard-coded tax rate — the business owner sets the applicable rate per line item.
 - **Currency**: All financial records store the original currency and exchange rate alongside an `amount_myr` field for reporting. Reporting and Borang B calculations use the MYR value.
 
@@ -278,6 +279,10 @@ cd apps/web && npm run e2e
 
 ## Roadmap
 
+- [ ] Apply LHDN's tiered mileage schedule automatically (currently a flat per-trip rate)
+- [ ] Include the ledger tables (`accounts`, `journal_entries`, `journal_entry_lines`, `payment_vouchers`) in the JSON backup — since v2.4 these hold the money figures
+- [ ] Wire up debit note (`03`) and self-billed (`11`) e-invoice submission
+- [ ] Capital allowance handling for fixed assets (`is_capital_allowance` is stored but not applied)
 - [ ] Recurring expense management UI (backend already scaffolded)
 - [ ] Audit trail viewer page (`audit_logs` table is populated, no UI yet)
 - [ ] Live MYR exchange rates via a public API (currently manual input)
