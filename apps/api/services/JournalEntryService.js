@@ -36,7 +36,19 @@ class JournalEntryService {
   async getExpenseAccountBySection(borangBSection) {
     const cacheKey = `bb:${borangBSection}`;
     if (this.#accountCache.has(cacheKey)) return this.#accountCache.get(cacheKey);
-    const account = await Account.findOne({ where: { borang_b_section: borangBSection, account_type: 'expense' } });
+    // D5 (Motor Vehicle Expenses) now has two accounts — 6400 for actual
+    // receipts and 6410 for mileage claims (see the 6410 seeder) — both
+    // carrying borang_b_section 'D5' so the split is invisible to Borang B
+    // totals. Without an explicit order, findOne's row choice is
+    // unspecified, so an actual-receipt expense (Petrol/Fuel, Vehicle
+    // Maintenance, Toll & Parking) could non-deterministically post to 6410
+    // instead of 6400. Ordering by code ASC makes 6400 win deterministically;
+    // mileage logs bypass this lookup entirely and post to 6410 directly
+    // (see onMileageLogged).
+    const account = await Account.findOne({
+      where: { borang_b_section: borangBSection, account_type: 'expense' },
+      order: [['code', 'ASC']],
+    });
     if (!account) throw new Error(`No expense account found for Borang B section "${borangBSection}"`);
     this.#accountCache.set(cacheKey, account);
     return account;
@@ -280,7 +292,12 @@ class JournalEntryService {
       entryDate: log.log_date,
       description: `Mileage: ${log.from_location || ''} → ${log.to_location || ''} (${log.km} km)`,
       lines: [
-        { accountCode: '6400', debit: amount, credit: 0, description: 'Motor vehicle expense (mileage)' },
+        // 6410 Mileage Claim, not 6400 Motor Vehicle Expenses — kept separate
+        // from actual fuel/maintenance/toll receipts (which post to 6400) so
+        // claiming both for the same trip is visible instead of silently
+        // merged. Both accounts carry borang_b_section 'D5', so the Borang B
+        // total is unaffected by this split.
+        { accountCode: '6410', debit: amount, credit: 0, description: 'Mileage claim (per-km)' },
         { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
       ],
       sourceType: 'mileage',
