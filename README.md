@@ -37,7 +37,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Exports a formatted Borang B summary PDF ready to hand to your tax agent
 
 ### Double-Entry Accounting (v2.0)
-- Pre-seeded Chart of Accounts (40 accounts) mapped to Malaysian Borang B sections D1-D20
+- Pre-seeded Chart of Accounts (41 accounts) mapped to Malaysian Borang B sections D1-D20
 - General Ledger with automatic journal entry creation for every financial transaction
 - GL Review Modal appears before each transaction — pre-fills smart defaults, allows manual account selection, or AI-powered suggestions via Claude
 - Profit & Loss report with Revenue, COGS, Gross Profit, Operating Expenses (by Borang B section), and Net Profit — with PDF export
@@ -255,6 +255,7 @@ cd apps/web && npm run e2e
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.5](docs/releases/v2.5.md) | 2026-08-11 | Mileage split to its own D5 account with double-claim detection, corrected the false "LHDN tiered rate" claim, fixed the payment voucher PDF download |
 | [v2.4](docs/releases/v2.4.md) | 2026-08-10 | GL-sourced cash flow, dashboard & Borang B tax — Payment Vouchers now appear on every money surface; backfill tool; test suites added |
 | [v2.3](docs/releases/v2.3.md) | 2026-07-24 | Payment Voucher module — modal create, service-item lines, GL posting on save, printable PDF |
 | [v2.2](docs/releases/v2.2.md) | 2026-03-30 | Document preview modal, PDF/image-only upload constraint, mileage rounding fix |
