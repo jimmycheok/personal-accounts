@@ -24,7 +24,10 @@ BACKUP_DIR="${BACKUP_DIR:-$HOME}"
 # These create Chart of Accounts rows that application code looks up by code. If
 # they have not been applied, `getAccountByCode` throws:
 #   6995 -> every non-deductible expense (v2.4)
-#   6410 -> every mileage log            (v2.5)
+#
+# 6410 (Mileage Claim) was listed here for v2.5, but that release was superseded
+# before it ever deployed: mileage is now a logbook that posts no journal entry,
+# so the account and its seeder were removed.
 #
 # Releases often ship a seeder and NO migration, so the migrate step above is a
 # no-op for them. Add a line here whenever a release adds a guarded account
@@ -39,13 +42,23 @@ BACKUP_DIR="${BACKUP_DIR:-$HOME}"
 # ─────────────────────────────────────────────────────────────────────────────
 SEEDERS=(
   20260806000001-non-deductible-account.cjs
-  20260806000002-mileage-claim-account.cjs
 )
 
 cd "$REPO_DIR"
 git checkout production
 git fetch
 git reset --hard origin/production   # production is rebased, so reset (not pull)
+
+# This list lives on `production` while the seeders live on `main`, so a release
+# that deletes or renames one leaves a stale entry here and `set -e` would abort
+# the deploy partway through. Verified against the tree just checked out.
+for seeder in "${SEEDERS[@]}"; do
+  if [ ! -f "apps/api/seeders/$seeder" ]; then
+    echo "FATAL: SEEDERS lists '$seeder' but apps/api/seeders/$seeder does not exist." >&2
+    echo "A release probably removed or renamed it — update SEEDERS in this script." >&2
+    exit 1
+  fi
+done
 
 COMPOSE="docker compose -f docker-compose.prod.yml"
 
@@ -86,7 +99,7 @@ done
 #    it when a user saves an expense.
 echo "=== Verifying prerequisite accounts ==="
 MISSING=$($COMPOSE exec -T postgres psql -U pa_user -d personal_accountant -tAc \
-  "SELECT string_agg(c, ', ') FROM (VALUES ('6995'),('6410')) v(c)
+  "SELECT string_agg(c, ', ') FROM (VALUES ('6995')) v(c)
    WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.code = v.c);")
 if [ -n "${MISSING// /}" ]; then
   echo "FATAL: prerequisite accounts missing: $MISSING" >&2
@@ -121,8 +134,13 @@ Post-deploy checks, in order:
      Dashboard and cash flow must report identical figures. They are the same
      query, so a mismatch means something is wrong.
 
-  3. If Borang B shows a mileage overlap warning, review D5 before filing —
-     a per-km claim substitutes for actual vehicle costs, it does not add to
-     them.
+  3. Mileage no longer posts to the ledger — it is a logbook only. If this is
+     the first deploy with that change, remove the historical mileage journal
+     entries so D5 reflects actual receipts. Dry run first:
+       docker compose -f docker-compose.prod.yml run --rm api \
+         node scripts/remove-mileage-journal-entries.js
+
+     It never touches mileage_logs — those trip records are the logbook that
+     substantiates business use and must survive.
 
 NEXT
