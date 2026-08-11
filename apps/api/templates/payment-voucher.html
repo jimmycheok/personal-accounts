@@ -16,16 +16,18 @@
   .amt { text-align: right; }
   .total-row td { font-weight: 700; border-top: 2px solid #161616; }
   .words { margin-top: 12px; font-style: italic; }
-  .sigs { display: flex; justify-content: space-between; margin-top: 60px; }
-  .sig { width: 30%; text-align: center; }
-  .sig .line { border-top: 1px solid #161616; padding-top: 6px; color: #6f6f6f; }
+  .generated-note { margin-top: 48px; padding-top: 12px; border-top: 1px solid #e0e0e0;
+                    text-align: center; font-size: 11px; color: #6f6f6f; font-style: italic; }
 </style>
 </head>
 <body>
   <div class="header">
     <div>
       <div class="biz-name">{{business.business_name}}</div>
-      <div>{{business.address}}</div>
+      <div>{{business.address_line1}}</div>
+      <div>{{business.address_line2}}</div>
+      <div>{{business.postcode}} {{business.city}}</div>
+      <div>{{business.state}} {{business.country}}</div>
       <div>{{business.phone}}</div>
     </div>
     <div>
@@ -59,10 +61,6 @@
 
   <div class="words">Ringgit Malaysia: {{voucher.amount_in_words}}</div>
 
-  <div class="sigs">
-    <div class="sig"><div class="line">Prepared by</div></div>
-    <div class="sig"><div class="line">Approved by</div></div>
-    <div class="sig"><div class="line">Received by</div></div>
-  </div>
+  <div class="generated-note">This payment voucher is computer generated. No signature is required.</div>
 </body>
 </html>
