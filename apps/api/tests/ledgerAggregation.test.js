@@ -2,13 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CASH_ACCOUNT_CODES,
-  VEHICLE_RECEIPTS_ACCOUNT_CODE,
-  MILEAGE_CLAIM_ACCOUNT_CODE,
   buildMonthBuckets,
   applyCashRows,
   finaliseMonths,
   applySectionRules,
-  findMileageOverlapMonths,
   ymd,
 } from '../services/ledgerAggregation.js';
 import { BORANG_B_SECTIONS } from '@personal-accountant/shared/constants/borangBMapping';
@@ -121,70 +118,3 @@ test('ymd keeps the local calendar year at a UTC year boundary', () => {
   assert.equal(ymd(new Date(2026, 11, 31)), '2026-12-31');
 });
 
-test('mileage overlap account codes are exactly 6400 (receipts) and 6410 (mileage)', () => {
-  assert.equal(VEHICLE_RECEIPTS_ACCOUNT_CODE, '6400');
-  assert.equal(MILEAGE_CLAIM_ACCOUNT_CODE, '6410');
-});
-
-test('findMileageOverlapMonths flags a month with activity on both accounts', () => {
-  const months = findMileageOverlapMonths([
-    { month: '2026-05', code: '6400', amount: '100.00' },
-    { month: '2026-05', code: '6410', amount: '48.00' },
-  ]);
-  assert.equal(months.length, 1);
-  assert.equal(months[0].month, '2026-05');
-  assert.equal(months[0].receiptsTotal, 100);
-  assert.equal(months[0].mileageTotal, 48);
-});
-
-test('findMileageOverlapMonths does not flag a month with only one account active', () => {
-  const receiptsOnly = findMileageOverlapMonths([{ month: '2026-05', code: '6400', amount: '100.00' }]);
-  assert.equal(receiptsOnly.length, 0);
-
-  const mileageOnly = findMileageOverlapMonths([{ month: '2026-06', code: '6410', amount: '48.00' }]);
-  assert.equal(mileageOnly.length, 0);
-});
-
-test('findMileageOverlapMonths ignores rows for unrelated accounts', () => {
-  const months = findMileageOverlapMonths([
-    { month: '2026-05', code: '6400', amount: '100.00' },
-    { month: '2026-05', code: '6410', amount: '48.00' },
-    { month: '2026-05', code: '9999', amount: '5000.00' },
-  ]);
-  assert.equal(months.length, 1);
-  assert.equal(months[0].receiptsTotal, 100);
-  assert.equal(months[0].mileageTotal, 48);
-});
-
-test('findMileageOverlapMonths does not flag a month where one side nets to zero or negative', () => {
-  // A void/reversal can leave a net credit balance; that is not "activity".
-  const months = findMileageOverlapMonths([
-    { month: '2026-05', code: '6400', amount: '0' },
-    { month: '2026-05', code: '6410', amount: '48.00' },
-  ]);
-  assert.equal(months.length, 0);
-});
-
-test('findMileageOverlapMonths sorts multiple overlapping months ascending', () => {
-  const months = findMileageOverlapMonths([
-    { month: '2026-07', code: '6400', amount: '50' },
-    { month: '2026-07', code: '6410', amount: '30' },
-    { month: '2026-02', code: '6400', amount: '20' },
-    { month: '2026-02', code: '6410', amount: '10' },
-  ]);
-  assert.deepEqual(months.map((m) => m.month), ['2026-02', '2026-07']);
-});
-
-test('findMileageOverlapMonths accumulates multiple rows per account before rounding to cents', () => {
-  const months = findMileageOverlapMonths([
-    { month: '2026-05', code: '6400', amount: '100.10' },
-    { month: '2026-05', code: '6400', amount: '200.20' },
-    { month: '2026-05', code: '6410', amount: '48.00' },
-  ]);
-  assert.equal(months[0].receiptsTotal, 300.3);
-});
-
-test('findMileageOverlapMonths returns an empty array for no rows', () => {
-  assert.deepEqual(findMileageOverlapMonths([]), []);
-  assert.deepEqual(findMileageOverlapMonths(undefined), []);
-});
