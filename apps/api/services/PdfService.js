@@ -41,7 +41,24 @@ function renderTemplate(templateName, data) {
     return template;
   };
 
-  return replace(html, data);
+  html = replace(html, data);
+
+  // Substitution walks the DATA and rewrites matching placeholders, so a
+  // placeholder naming a field that does not exist is never visited and
+  // survives into the rendered PDF as literal `{{business.address}}` text.
+  // That shipped to a customer-facing voucher once already. Strip anything
+  // left over so a bad placeholder degrades to a blank rather than leaking
+  // template syntax. Dynamic sections use `<!-- ... -->` markers replaced
+  // after this point, so they are unaffected.
+  const leftover = html.match(/\{\{[^{}]*\}\}/g);
+  if (leftover) {
+    console.warn(
+      `[PdfService] ${templateName}: unresolved placeholder(s) removed: ${[...new Set(leftover)].join(', ')}`,
+    );
+    html = html.replace(/\{\{[^{}]*\}\}/g, '');
+  }
+
+  return html;
 }
 
 function renderItemsHtml(items, currency) {
