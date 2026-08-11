@@ -536,3 +536,16 @@ The 2026-08-10 fix correctly identified that LHDN publishes no per-km rate and t
 | Documents | `subject_id cannot be null` | Standalone uploads use `subject_id = 0` with `subject_type = 'general'` |
 | Documents | FileUploader showed infinite spinner | Added `filenameStatus="edit"` to Carbon FileUploader component |
 | DataTable | `row._raw` undefined | Looked up record from original state array using `find(e => String(e.id) === row.id)` |
+
+## Specification Corrections (discovered during the v2.6 PDF fix, 2026-08-11)
+
+### `PdfService.renderTemplate` silently emitted unresolved placeholders
+`renderTemplate` walks the **data object** and rewrites `{{prefix.key}}` for each key it finds. A placeholder naming a field that does not exist is therefore never visited, and survives into the rendered PDF as literal template syntax. This shipped: the payment voucher rendered `{{business.address}}` under the business name, because `BusinessProfile` has no `address` field — it stores `address_line1`, `address_line2`, `city`, `postcode`, `state` and `country` separately, which `invoice.html` already used correctly.
+
+- The voucher template now uses the real fields.
+- `renderTemplate` strips any `{{...}}` remaining after substitution and logs which ones it removed, so a bad reference degrades to a blank rather than leaking template syntax to whoever receives the document.
+- Dynamic sections (invoice items, PV lines, P&L rows) use `<!-- ... -->` comment markers replaced *after* `renderTemplate`, so they are unaffected by the sweep.
+- An audit of every `business.*` placeholder across all templates found this was the only unresolvable one.
+
+### The payment voucher no longer carries signature lines
+Prepared/Approved/Received signature lines were replaced with "This payment voucher is computer generated. No signature is required."
