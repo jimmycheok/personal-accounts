@@ -84,9 +84,6 @@ function buildPrompt(type, data, accounts) {
     case 'credit_note_void':
       txn = `Void credit note ${data.credit_note_number || ''}. Amount: ${amt(data.amount)}. Reverse the credit note entry.`;
       break;
-    case 'mileage_create':
-      txn = `Mileage trip: ${data.from_location || ''} → ${data.to_location || ''}, ${data.km || 0} km. Deductible: ${amt(data.deductible_amount)}. DR Motor Vehicle Expenses (D5), CR Bank/Owner's Capital.`;
-      break;
     default:
       txn = JSON.stringify(data);
   }

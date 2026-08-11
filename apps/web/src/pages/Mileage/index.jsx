@@ -29,7 +29,6 @@ import {
 import { Add } from '@carbon/icons-react';
 import api from '../../services/api.js';
 import { format } from 'date-fns';
-import GLReviewModal from '../../components/GLReviewModal.jsx';
 import ConfirmModal from '../../components/ConfirmModal.jsx';
 
 const HEADERS = [
@@ -38,7 +37,7 @@ const HEADERS = [
   { key: 'to_location', header: 'To' },
   { key: 'distance_km', header: 'Distance (km)' },
   { key: 'purpose', header: 'Purpose' },
-  { key: 'deduction', header: 'Deduction' },
+  { key: 'deduction', header: 'Estimated Value' },
   { key: 'actions', header: '' },
 ];
 
@@ -60,25 +59,17 @@ const EMPTY_FORM = () => ({
 
 const purposeLabel = (p) => (p || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-const monthLabel = (yyyyMm) => {
-  const [y, m] = yyyyMm.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'long', year: 'numeric' });
-};
-
 export default function MileagePage() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [logOpen, setLogOpen] = useState(false);
   const [viewEntry, setViewEntry] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
-  const [overlapMonths, setOverlapMonths] = useState([]);
 
   // Log trip form state
   const [form, setForm] = useState(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [showGLReview, setShowGLReview] = useState(false);
-  const [pendingTrip, setPendingTrip] = useState(null);
 
   const fetchMileage = async () => {
     setLoading(true);
@@ -92,19 +83,7 @@ export default function MileagePage() {
     }
   };
 
-  // Months where both actual vehicle receipts (6400) and mileage claims
-  // (6410) posted — the signal a trip may have been claimed under both
-  // bases. Informational only; never blocks logging or saving.
-  const fetchOverlap = async () => {
-    try {
-      const res = await api.get('/mileage/overlap');
-      setOverlapMonths(res.data.months || []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => { fetchMileage(); fetchOverlap(); }, []);
+  useEffect(() => { fetchMileage(); }, []);
 
   const openLog = () => {
     setForm(EMPTY_FORM());
@@ -112,43 +91,29 @@ export default function MileagePage() {
     setLogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.from_location || !form.to_location || !form.km) {
       setFormError('From, To and Distance are required');
       return;
     }
     const km = Number(form.km) * (form.round_trip ? 2 : 1);
-    const rate = parseFloat(process.env.MILEAGE_RATE_PER_KM) || MY_MILEAGE_RATE;
-    const deductible = Math.round(km * rate * 100) / 100;
-    setPendingTrip({
-      log_date: form.log_date,
-      from_location: form.from_location,
-      to_location: form.to_location,
-      purpose: form.purpose,
-      notes: form.notes,
-      km,
-      deductible_amount: deductible,
-    });
-    setLogOpen(false);
-    setShowGLReview(true);
-  };
-
-  const handleGLAccept = async (journalLines) => {
-    setShowGLReview(false);
     setSaving(true);
     setFormError('');
     try {
       await api.post('/mileage', {
-        ...pendingTrip,
-        journal_lines: journalLines,
+        log_date: form.log_date,
+        from_location: form.from_location,
+        to_location: form.to_location,
+        purpose: form.purpose,
+        notes: form.notes,
+        km,
       });
+      setLogOpen(false);
       fetchMileage();
-      fetchOverlap();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to log mileage');
     } finally {
       setSaving(false);
-      setPendingTrip(null);
     }
   };
 
@@ -163,7 +128,6 @@ export default function MileagePage() {
       await api.delete(`/mileage/${id}`);
       if (viewEntry && String(viewEntry.id) === String(id)) setViewEntry(null);
       fetchMileage();
-      fetchOverlap();
     } catch (err) {
       console.error('Failed to delete');
     }
@@ -191,17 +155,6 @@ export default function MileagePage() {
         <Button renderIcon={Add} onClick={openLog}>Log Trip</Button>
       </div>
 
-      {overlapMonths.length > 0 && (
-        <InlineNotification
-          kind="warning"
-          lowContrast
-          title="Possible double-claimed vehicle costs"
-          subtitle={`Both fuel/maintenance receipts and mileage claims were recorded in ${overlapMonths.map(m => monthLabel(m.month)).join(', ')}. A per-km mileage claim substitutes for actual vehicle costs — claiming both for the same trip would deduct it twice. Review D5 before filing.`}
-          style={{ marginBottom: '1.5rem' }}
-          hideCloseButton
-        />
-      )}
-
       <div className="grid-3" style={{ marginBottom: '1.5rem' }}>
         <Tile style={{ padding: '1.25rem' }}>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0f62fe' }}>{totalKm.toFixed(1)}</div>
@@ -209,7 +162,7 @@ export default function MileagePage() {
         </Tile>
         <Tile style={{ padding: '1.25rem' }}>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0e6027' }}>RM {totalDeduction.toFixed(2)}</div>
-          <div style={{ fontSize: '0.875rem', color: '#525252' }}>Total Tax Deduction</div>
+          <div style={{ fontSize: '0.875rem', color: '#525252' }}>Total Estimated Value</div>
         </Tile>
         <Tile style={{ padding: '1.25rem' }}>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#525252' }}>{entries.length}</div>
@@ -278,10 +231,9 @@ export default function MileagePage() {
       )}
 
       <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: '#8d8d8d' }}>
-        * Mileage deduction: km × rate, defaulting to RM 0.60/km and overridable per trip. This is a
-        reasonable per-km estimate, not an LHDN-prescribed rate — LHDN publishes no such rate for a
-        sole proprietor's business deduction. The statutory basis is actual costs (fuel, repairs,
-        insurance, road tax, parking) apportioned by business use, substantiated by a logbook.
+        * This log is a record and estimate only (km × rate, defaulting to RM 0.60/km) — it is not a
+        tax deduction; vehicle costs are claimed from actual receipts in the Expenses module, with
+        this log serving as the substantiating logbook.
       </p>
 
       {/* Log Trip Modal */}
@@ -348,7 +300,7 @@ export default function MileagePage() {
                   />
                   Round Trip
                 </label>
-                <Tag type="blue">Est. Deduction: RM {estimatedDeduction.toFixed(2)}</Tag>
+                <Tag type="blue">Estimated Value: RM {estimatedDeduction.toFixed(2)}</Tag>
               </div>
             </div>
 
@@ -403,7 +355,7 @@ export default function MileagePage() {
                   <p style={{ fontWeight: 600, margin: 0 }}>{Number(viewEntry.km).toFixed(1)} km</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '0.75rem', color: '#525252', marginBottom: '0.25rem' }}>Tax Deduction</p>
+                  <p style={{ fontSize: '0.75rem', color: '#525252', marginBottom: '0.25rem' }}>Estimated Value</p>
                   <p style={{ fontWeight: 600, margin: 0, color: '#0e6027' }}>
                     RM {Number(viewEntry.deductible_amount || 0).toFixed(2)}
                   </p>
@@ -432,14 +384,6 @@ export default function MileagePage() {
           <Button kind="secondary" onClick={() => setViewEntry(null)}>Close</Button>
         </ModalFooter>
       </ComposedModal>
-
-      <GLReviewModal
-        open={showGLReview}
-        type="mileage_create"
-        data={pendingTrip}
-        onAccept={handleGLAccept}
-        onCancel={() => { setShowGLReview(false); setLogOpen(true); }}
-      />
 
       <ConfirmModal
         open={confirmDelete.open}

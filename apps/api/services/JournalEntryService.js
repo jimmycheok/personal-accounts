@@ -36,15 +36,15 @@ class JournalEntryService {
   async getExpenseAccountBySection(borangBSection) {
     const cacheKey = `bb:${borangBSection}`;
     if (this.#accountCache.has(cacheKey)) return this.#accountCache.get(cacheKey);
-    // D5 (Motor Vehicle Expenses) now has two accounts — 6400 for actual
-    // receipts and 6410 for mileage claims (see the 6410 seeder) — both
-    // carrying borang_b_section 'D5' so the split is invisible to Borang B
-    // totals. Without an explicit order, findOne's row choice is
-    // unspecified, so an actual-receipt expense (Petrol/Fuel, Vehicle
-    // Maintenance, Toll & Parking) could non-deterministically post to 6410
-    // instead of 6400. Ordering by code ASC makes 6400 win deterministically;
-    // mileage logs bypass this lookup entirely and post to 6410 directly
-    // (see onMileageLogged).
+    // Defensive ordering, not a design requirement: mileage no longer posts
+    // to the GL, so a second D5 account (the old 6410 Mileage Claim) should
+    // no longer exist once its seeder is removed. But deleting the seeder
+    // file does not retroactively remove a 6410 row that a prior deploy
+    // already created — without an explicit order, findOne's row choice is
+    // unspecified, so an actual D5 expense (Petrol/Fuel, Vehicle
+    // Maintenance, Toll & Parking) could non-deterministically resolve to
+    // that orphaned account instead of 6400. Ordering by code ASC keeps
+    // 6400 the deterministic winner regardless.
     const account = await Account.findOne({
       where: { borang_b_section: borangBSection, account_type: 'expense' },
       order: [['code', 'ASC']],
@@ -281,27 +281,6 @@ class JournalEntryService {
       ],
       sourceType: 'expense',
       sourceId: expense.id,
-    });
-  }
-
-  async onMileageLogged(log) {
-    const amount = parseFloat(log.deductible_amount);
-    if (amount <= 0) return;
-
-    await this.createAutoEntry({
-      entryDate: log.log_date,
-      description: `Mileage: ${log.from_location || ''} → ${log.to_location || ''} (${log.km} km)`,
-      lines: [
-        // 6410 Mileage Claim, not 6400 Motor Vehicle Expenses — kept separate
-        // from actual fuel/maintenance/toll receipts (which post to 6400) so
-        // claiming both for the same trip is visible instead of silently
-        // merged. Both accounts carry borang_b_section 'D5', so the Borang B
-        // total is unaffected by this split.
-        { accountCode: '6410', debit: amount, credit: 0, description: 'Mileage claim (per-km)' },
-        { accountCode: '1010', debit: 0, credit: amount, description: 'Bank payment' },
-      ],
-      sourceType: 'mileage',
-      sourceId: log.id,
     });
   }
 
