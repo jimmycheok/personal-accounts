@@ -51,7 +51,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Create from a modal with a free-text **service-item** table (item + amount) and staged file attachments
 - On save, the GL Review modal posts a balanced journal entry immediately — defaulting to DR Salaries & Wages (`6100`) / CR the payment-method account (Bank `1010` or Cash `1000`) — and the voucher is marked posted
 - Void reverses the journal entry
-- Downloads a printable PDF voucher (`PV-YYYYMM-NNNN.pdf`) with amount-in-words and Prepared/Approved/Received signature lines
+- Downloads a printable PDF voucher (`PV-YYYYMM-NNNN.pdf`) with amount-in-words and a "computer generated, no signature required" note
 
 ### GL-Sourced Money Figures (v2.4)
 - Cash Flow, the Dashboard and Borang B tax all read the **General Ledger**, not the `expenses`/`invoices` tables — so Payment Vouchers and manual journal entries appear everywhere, consistently
@@ -255,6 +255,7 @@ cd apps/web && npm run e2e
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.6](docs/releases/v2.6.md) | 2026-08-11 | Mileage becomes a logbook only (no journal entry, no deduction); voucher PDF address and signature block fixed; unresolved template placeholders no longer leak into PDFs |
 | [v2.5](docs/releases/v2.5.md) | 2026-08-11 | Mileage split to its own D5 account with double-claim detection, corrected the false "LHDN tiered rate" claim, fixed the payment voucher PDF download |
 | [v2.4](docs/releases/v2.4.md) | 2026-08-10 | GL-sourced cash flow, dashboard & Borang B tax — Payment Vouchers now appear on every money surface; backfill tool; test suites added |
 | [v2.3](docs/releases/v2.3.md) | 2026-07-24 | Payment Voucher module — modal create, service-item lines, GL posting on save, printable PDF |
