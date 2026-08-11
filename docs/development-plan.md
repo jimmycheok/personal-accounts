@@ -455,6 +455,22 @@ The v2.1 correction above states the mileage rate should be "RM 0.60/km (first 2
 
 ---
 
+## Specification Corrections (discovered during mileage-logbook-only fix, 2026-08-11)
+
+### The 2026-08-10 correction above (separate 6410 account + overlap detection) is itself superseded — mileage is now a logbook only
+
+The 2026-08-10 fix correctly identified that LHDN publishes no per-km rate and that the statutory basis is actual costs under s.33(1) ITA 1967. But it stopped short: it kept mileage posting a journal entry (to a new account, `6410`, instead of the shared `6400`) and treated the two accounts landing in the same month as a mere "possible" double-claim to flag. In practice the owner was claiming a mileage estimate *and* the real receipts for the same vehicle every month — not a possible overlap, an actual and continuous one. That is now corrected:
+
+- **Mileage posts no journal entry at all**, and is not a deduction under any account. `POST /mileage` no longer calls `JournalEntryService.onMileageLogged` (removed entirely) or accepts `journal_lines`; it only ever writes to `mileage_logs`.
+- **The `6410` Mileage Claim account is removed.** Its seeder (`20260806000002-mileage-claim-account.cjs`) is deleted. A fresh install now seeds **40** accounts, not 41. Any deployment that ran the v2.5 seeder still has a `6410` row in its `accounts` table — deleting the seeder file does not retroactively remove it — so `JournalEntryService.getExpenseAccountBySection`'s `ORDER BY code ASC` is kept as a defensive measure so an actual D5 expense still resolves to `6400`, not the orphaned `6410`.
+- **The overlap-detection machinery is removed as meaningless**, not fixed: `LedgerQueryService.getMileageOverlapByMonth`, `ledgerAggregation.js`'s `VEHICLE_RECEIPTS_ACCOUNT_CODE` / `MILEAGE_CLAIM_ACCOUNT_CODE` / `findMileageOverlapMonths`, the `GET /mileage/overlap` route, `TaxCalculator`'s `mileageOverlapMonths` field, and the warning banners on the Mileage and Taxation pages are all gone. With mileage never posting, there is nothing left to overlap.
+- **D5 (Motor Vehicle Expenses) is now funded solely by account `6400`** — actual receipts (fuel, repairs, insurance, road tax, parking) recorded in Expenses. `TaxCalculator.generateBorangBData` still reports `mileage: { totalKm, deductibleAmount }` for display, exactly as before, but it was already excluded from `sectionTotals` and remains so — that part of the 2026-08-10 design was correct and is unchanged.
+- **Why this matters beyond Borang B**: the removed `onMileageLogged` entry credited `3000` Owner's Capital, fabricating an expense funded by owner capital that had no corresponding real cash movement. Alongside the real receipt already posted for the same trip, this overstated **Profit & Loss and the Balance Sheet**, not only the tax return.
+- **Production cleanup**: `apps/api/scripts/remove-mileage-journal-entries.js` (dry-run by default, `--apply` to write) deletes every `journal_entries` row with `source_type = 'mileage'` — and only those — while leaving `mileage_logs` untouched, since those trip records remain the substantiating logbook for the actual-cost claim. Production has 21 such entries totalling RM1,334.52, all posted to `6400` (not `6410` — that account was never deployed to production). Removing them is expected to move D5 from RM1,971.52 to RM637.00 and Borang B `totalExpenses` from RM5,128.81 to RM3,794.29 — the script had not yet been run against production as of this fix landing; see `mileage-logbook-report.md` for status.
+- **Known pre-existing inconsistency, left as-is**: `TaxCalculator.getMileageDeduction` (the display-only figure) uses a flat `0.25`/km, while `routes/mileage.js` stores each log's `deductible_amount` at `km × 0.60`. This mismatch predates this fix and is out of scope for it, but is now more visible: since the display figure is purely informational, it will disagree with the mileage log's own per-trip totals. A future fix should make `getMileageDeduction` read the same rate the logs were actually stored at, or drop the flat-rate recomputation and sum `mileage_logs.deductible_amount` directly.
+
+---
+
 ## Release Log
 
 ### v1.3 — Code Quality, Shared Tax Constants & Minor Fixes (2026-03-18)

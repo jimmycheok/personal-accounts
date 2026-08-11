@@ -42,7 +42,6 @@ npx sequelize-cli db:seed:undo:all        # unseed
 
 # On a database that already has data, seed ONE seeder by name:
 npx sequelize-cli db:seed --seed 20260806000001-non-deductible-account.cjs
-npx sequelize-cli db:seed --seed 20260806000002-mileage-claim-account.cjs
 ```
 
 > **Never run `db:seed:all` against a populated database.** `seederStorage` is not
@@ -50,12 +49,11 @@ npx sequelize-cli db:seed --seed 20260806000002-mileage-claim-account.cjs
 > re-runs **every** seeder. `20260327000002-retroactive-journal-entries.cjs` does raw
 > `INSERT INTO journal_entries` with no existence guard, so a second run duplicates every
 > journal entry — which, since v2.4, doubles every figure on cash flow, the dashboard and
-> Borang B. The account seeders (`6995`, `6410`) are individually guarded and safe to
-> re-run; the retroactive one is not.
+> Borang B. The `6995` account seeder is individually guarded and safe to re-run; the
+> retroactive one is not.
 >
-> Both account seeders are **deployment prerequisites**: ship them before the code that
-> depends on them, or `getAccountByCode` throws on every non-deductible expense (`6995`)
-> and every mileage log (`6410`).
+> The `6995` account seeder is a **deployment prerequisite**: ship it before the code that
+> depends on it, or `getAccountByCode` throws on every non-deductible expense.
 
 ### Web build
 ```bash
@@ -105,7 +103,7 @@ Defined in `apps/api/jobs/`. Each job is a separate file that exports a `define*
 
 ### Services
 - **`MyInvoisService`** — singleton. Manages LHDN OAuth2 token (cached in `einvoice_configs` table with 60-min TTL). Builds UBL JSON documents, submits to LHDN, polls status. Client secret is AES-256-CBC encrypted (`iv_hex:ciphertext_hex` format) using `AES_SECRET_KEY` env var.
-- **`TaxCalculator`** — aggregates paid invoices (income) + expenses by `borang_b_section` + mileage logs. Entertainment expenses (D15) automatically get 50% deductibility applied.
+- **`TaxCalculator`** — aggregates paid invoices (income) + expenses by `borang_b_section`. Mileage logs are reported for display only (`mileage: { totalKm, deductibleAmount }`) — they post no journal entry and are never added into a section total. Entertainment expenses (D15) automatically get 50% deductibility applied.
 - **`StorageService`** — strategy pattern. Reads `storage_configs` table to determine backend (local/aws_s3/google_drive). Local files stored under `uploads/{type}/{year}/{month}/{uuid}.ext`.
 - **`PdfService`** — reads HTML templates from `apps/api/templates/`, does `{{placeholder}}` substitution, sends rendered HTML to Gotenberg via native `fetch` POST to `/forms/chromium/convert/html`. Supports invoice, quotation, credit note, and tax summary PDFs.
 - **`DuitNowService`** — generates EMVCo-compliant QR payloads with CRC-16 checksum.
@@ -152,6 +150,6 @@ Copy `.env.example` to `.env`. Critical vars:
 
 ## Malaysian tax specifics
 - **Borang B sections** D1–D20 map to expense categories. D15 (Entertainment) is 50% deductible — enforced in `TaxCalculator.getExpensesBySection()`, not at data entry.
-- **Mileage rate**: RM 0.60/km flat (`MILEAGE_RATE_PER_KM`, overridable per trip) — this is the owner's own reasonable estimate, **not** an LHDN-prescribed rate. LHDN publishes no per-km business deduction rate for a sole proprietor; the RM0.60/first-200km-then-RM0.30 figure sometimes attributed to "LHDN mileage" is the Malaysian civil service rate (Pekeliling Perbendaharaan), which applies only to government staff, not private businesses. The statutory basis for a sole proprietor is actual costs apportioned by business use under s.33(1) ITA 1967, substantiated by a logbook. Mileage claims post to account `6410` (Mileage Claim), separate from actual vehicle receipts posted to `6400` (Motor Vehicle Expenses) — both carry `borang_b_section: 'D5'` so the Borang B total is unchanged by the split, but `LedgerQueryService.getMileageOverlapByMonth()` flags months where both accounts have activity, since a per-km claim is meant to substitute for actual costs, not add to them.
+- **Mileage log is a logbook only** — it posts no journal entry and produces no tax deduction. LHDN publishes no per-km business deduction rate for a sole proprietor; the RM0.60/first-200km-then-RM0.30 figure sometimes attributed to "LHDN mileage" is the Malaysian civil service rate (Pekeliling Perbendaharaan), which applies only to government staff, not private businesses. The statutory basis for a sole proprietor is actual costs apportioned by business use under s.33(1) ITA 1967, substantiated by a logbook. `routes/mileage.js` still computes and stores `deductible_amount` (`km × rate`, default RM 0.60/km via `MILEAGE_RATE_PER_KM`, overridable per trip) as the owner's own reference estimate — labelled "Estimated value" in the UI — but this is not claimed anywhere; D5 (Motor Vehicle Expenses, account `6400`) is funded solely by actual vehicle receipts (fuel, repairs, insurance, road tax, parking) recorded in Expenses, with the mileage log as the substantiating logbook for that claim.
 - **LHDN MyInvois**: Sandbox URL is `https://preprod-api.myinvois.hasil.gov.my`; toggle via `einvoice_configs.is_sandbox`. B2C transactions < RM200 use consolidated monthly submission (document type `01`, special buyer TIN `EI00000000010`).
 - **Assessment years**: Tax bracket data in `packages/shared/src/constants/taxBrackets.js` currently covers AY2024 and AY2025 (same brackets until LHDN updates).
