@@ -26,11 +26,6 @@ const DEFAULT_TEMPLATES = {
   expense_create:     [{ code: '6999', side: 'debit' }, { code: '1010', side: 'credit' }],
   credit_note_send:   [{ code: '4000', side: 'debit' }, { code: '1100', side: 'credit' }],
   credit_note_void:   [{ code: '1100', side: 'debit' }, { code: '4000', side: 'credit' }],
-  // 6410 Mileage Claim — kept separate from 6400 Motor Vehicle Expenses
-  // (actual fuel/maintenance/toll receipts) so claiming a per-km rate and an
-  // actual receipt for the same trip is visible rather than merged into one
-  // account. Both carry Borang B section D5, so the section total is the same.
-  mileage_create:     [{ code: '6410', side: 'debit' }, { code: '3000', side: 'credit' }],
   payment_voucher_create: [{ code: '6100', side: 'debit' }, { code: '1010', side: 'credit' }],
 };
 
