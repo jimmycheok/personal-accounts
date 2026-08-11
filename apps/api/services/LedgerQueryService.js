@@ -1,13 +1,10 @@
 import { sequelize } from '../models/index.js';
 import {
   CASH_ACCOUNT_CODES,
-  VEHICLE_RECEIPTS_ACCOUNT_CODE,
-  MILEAGE_CLAIM_ACCOUNT_CODE,
   buildMonthBuckets,
   applyCashRows,
   finaliseMonths,
   applySectionRules,
-  findMileageOverlapMonths,
 } from './ledgerAggregation.js';
 
 /** All money questions answered from the general ledger, so every module that
@@ -87,41 +84,6 @@ class LedgerQueryService {
       { replacements: { from, to } },
     );
     return Math.round(parseFloat(rows[0]?.amount || 0) * 100) / 100;
-  }
-
-  async #mileageOverlapRows(from, to) {
-    const [rows] = await sequelize.query(
-      `SELECT to_char(je.entry_date, 'YYYY-MM') AS month,
-              a.code AS code,
-              COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) AS amount
-       FROM journal_entry_lines jel
-       JOIN journal_entries je ON je.id = jel.journal_entry_id
-       JOIN accounts a        ON a.id = jel.account_id
-       WHERE je.status = 'posted'
-         AND a.code IN (:receiptsCode, :mileageCode)
-         AND je.entry_date BETWEEN :from AND :to
-         AND je.source_type IS DISTINCT FROM 'year_end_close'
-       GROUP BY 1, 2`,
-      {
-        replacements: {
-          from,
-          to,
-          receiptsCode: VEHICLE_RECEIPTS_ACCOUNT_CODE,
-          mileageCode: MILEAGE_CLAIM_ACCOUNT_CODE,
-        },
-      },
-    );
-    return rows;
-  }
-
-  /**
-   * Months where both actual vehicle receipts (6400) and mileage claims
-   * (6410) have posted activity in the same period — the signal that a trip
-   * may have been claimed under both bases at once. Purely informational:
-   * callers surface this as a warning, never as a block.
-   */
-  async getMileageOverlapByMonth(from, to) {
-    return findMileageOverlapMonths(await this.#mileageOverlapRows(from, to));
   }
 }
 

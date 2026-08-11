@@ -3,7 +3,6 @@ import { verifyJwt } from '../middlewares/verifyJwt.js';
 import { MileageLog } from '../models/index.js';
 import { Op } from 'sequelize';
 import JournalEntryService from '../services/JournalEntryService.js';
-import LedgerQueryService from '../services/LedgerQueryService.js';
 
 const router = Router();
 router.use(verifyJwt);
@@ -53,6 +52,11 @@ router.post('/', async (req, res, next) => {
     const deductible_amount = km * rate;
     const tax_year = new Date(log_date).getFullYear();
 
+    // Logbook only: no journal entry, no tax deduction. deductible_amount is
+    // still computed and stored as an estimate for the owner's own reference
+    // — actual vehicle costs are claimed from receipts in the Expenses
+    // module (D5), which substantiate the deduction under s.33(1) ITA 1967.
+    // This log is the supporting logbook for that claim, not a claim itself.
     const log = await MileageLog.create({
       log_date,
       from_location,
@@ -64,38 +68,6 @@ router.post('/', async (req, res, next) => {
       tax_year,
       notes,
     });
-
-    // The GL is the source of truth for cash flow, dashboard and tax, so a
-    // mileage log must never exist without an entry. Use the client's
-    // reviewed lines when present, otherwise derive them. If the GL post
-    // fails, the log must not survive either — compensate by destroying it
-    // so we never leave a record without a matching journal entry.
-    try {
-      if (req.body.journal_lines?.length) {
-        await JournalEntryService.createAutoEntry({
-          entryDate: log_date,
-          description: `Mileage: ${from_location} → ${to_location} (${km} km)`,
-          lines: req.body.journal_lines.map(l => ({ accountId: l.account_id, debit: parseFloat(l.debit || 0), credit: parseFloat(l.credit || 0), description: l.description })),
-          sourceType: 'mileage',
-          sourceId: log.id,
-        });
-      } else {
-        await JournalEntryService.onMileageLogged(log);
-      }
-    } catch (err) {
-      // The original GL error is the real cause and must survive. A failed cleanup
-      // is logged loudly instead: that record now has no journal entry and will
-      // need the backfill script.
-      try {
-        await log.destroy();
-      } catch (cleanupErr) {
-        console.error(
-          `GL rollback failed for mileage log ${log.id} — record may have no journal entry:`,
-          cleanupErr.message,
-        );
-      }
-      throw err;
-    }
 
     res.status(201).json(log);
   } catch (err) { next(err); }
@@ -128,17 +100,6 @@ router.get('/summary', async (req, res, next) => {
       tripCount: logs.length,
       byMonth: Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month)),
     });
-  } catch (err) { next(err); }
-});
-
-// GET /mileage/overlap?year=2026 — months where both actual vehicle
-// receipts (6400) and mileage claims (6410) posted activity: the signal
-// that a trip may have been claimed under both bases. Informational only.
-router.get('/overlap', async (req, res, next) => {
-  try {
-    const year = parseInt(req.query.year) || new Date().getFullYear();
-    const months = await LedgerQueryService.getMileageOverlapByMonth(`${year}-01-01`, `${year}-12-31`);
-    res.json({ year, months });
   } catch (err) { next(err); }
 });
 
