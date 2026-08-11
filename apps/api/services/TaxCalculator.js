@@ -71,11 +71,13 @@ class TaxCalculator {
     const totalIncome = await LedgerQueryService.getIncomeTotal(`${year}-01-01`, `${year}-12-31`);
     const { sectionTotals } = await this.getExpensesBySection(year);
     const { totalKm, deductibleAmount: mileageDeduction } = await this.getMileageDeduction(year);
+    const mileageOverlapMonths = await LedgerQueryService.getMileageOverlapByMonth(`${year}-01-01`, `${year}-12-31`);
 
     // The GL is authoritative: mileage logs post their own journal entry
-    // (debit 6400 Motor Vehicle Expenses, which carries borang_b_section
-    // 'D5'), so getExpensesBySection already includes mileage. Adding
-    // mileageDeduction here would double-count it under a different rate.
+    // (debit 6410 Mileage Claim, which carries borang_b_section 'D5' just
+    // like 6400 Motor Vehicle Expenses used for actual receipts), so
+    // getExpensesBySection already includes mileage. Adding mileageDeduction
+    // here would double-count it under a different rate.
     // `mileage` below is reported for display only — it is NOT added into
     // sectionTotals.
 
@@ -98,6 +100,10 @@ class TaxCalculator {
       },
       grossProfit: Math.round(grossProfit * 100) / 100,
       mileage: { totalKm, deductibleAmount: mileageDeduction },
+      // Months where both actual vehicle receipts (6400) and mileage claims
+      // (6410) were posted — informational only, see
+      // LedgerQueryService.getMileageOverlapByMonth.
+      mileageOverlapMonths,
       generatedAt: new Date().toISOString(),
     };
   }

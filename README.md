@@ -16,8 +16,8 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 
 ### LHDN MyInvois E-Invoice Compliance
 - Submit e-invoices to LHDN in UBL JSON format (mandatory for eligible businesses)
-- Supports all four document types: standard invoice (01), credit note (02), debit note (03), and self-billed invoice (11)
-- Consolidated monthly submission for B2C transactions under RM 200
+- Submits standard invoices (type `01`) and credit notes (type `02`). Debit note (`03`) and self-billed (`11`) exist in the submission schema but are not yet wired up — see Roadmap
+- Consolidated monthly submission for B2C transactions under RM 200 (special buyer TIN `EI00000000010`)
 - LHDN QR code embedded on invoice PDF once submission is validated
 - Real-time status polling; cancellation supported within LHDN's 72-hour window
 
@@ -28,14 +28,16 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Entertainment expenses (D15) are stored at full amount; the 50% deductibility rule is applied automatically at tax calculation time
 
 ### Borang B Tax Preparation
-- Aggregates all paid invoices (Part B income) and deductible expenses by Borang B section (Part D)
-- Mileage logs contribute to D5 at the LHDN-approved tiered rate (RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter)
+- Income (Part B) and deductible expenses by Borang B section (Part D) are both read from the General Ledger, so every module that posts a journal entry — including Payment Vouchers — is counted
+- Income is recognised on an **accrual** basis (revenue accounts), not cash received
+- Expenses posted to accounts with no Borang B section (e.g. `6995` Non-Deductible Expenses) are excluded from Part D while still appearing in Profit & Loss
+- Mileage logs contribute to D5 via their journal entry (DR `6410` Mileage Claim), kept separate from actual vehicle receipts (`6400` Motor Vehicle Expenses) so a trip claimed under both bases is visible — see "Mileage log" below
 - Personal relief inputs (EPF, medical, education, dependants, etc.) applied to arrive at chargeable income
 - Progressive tax brackets for AY2024/2025 with a full bracket breakdown
 - Exports a formatted Borang B summary PDF ready to hand to your tax agent
 
 ### Double-Entry Accounting (v2.0)
-- Pre-seeded Chart of Accounts (35 accounts) mapped to Malaysian Borang B sections D1-D20
+- Pre-seeded Chart of Accounts (40 accounts) mapped to Malaysian Borang B sections D1-D20
 - General Ledger with automatic journal entry creation for every financial transaction
 - GL Review Modal appears before each transaction — pre-fills smart defaults, allows manual account selection, or AI-powered suggestions via Claude
 - Profit & Loss report with Revenue, COGS, Gross Profit, Operating Expenses (by Borang B section), and Net Profit — with PDF export
@@ -48,17 +50,24 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Record outgoing payments (e.g. freelancer salaries) as formal, numbered payment vouchers (`PV-YYYYMM-NNNN`)
 - Create from a modal with a free-text **service-item** table (item + amount) and staged file attachments
 - On save, the GL Review modal posts a balanced journal entry immediately — defaulting to DR Salaries & Wages (`6100`) / CR the payment-method account (Bank `1010` or Cash `1000`) — and the voucher is marked posted
-- Void reverses the journal entry; printable PDF voucher with amount-in-words and Prepared/Approved/Received signature lines
+- Void reverses the journal entry
+- Downloads a printable PDF voucher (`PV-YYYYMM-NNNN.pdf`) with amount-in-words and Prepared/Approved/Received signature lines
+
+### GL-Sourced Money Figures (v2.4)
+- Cash Flow, the Dashboard and Borang B tax all read the **General Ledger**, not the `expenses`/`invoices` tables — so Payment Vouchers and manual journal entries appear everywhere, consistently
+- Cash is defined as accounts `1000` (Cash on Hand) and `1010` (Bank Account): a debit is an inflow, a credit an outflow. Credit Card (`2300`) is a liability, so a card purchase becomes an outflow only when the card is paid
+- Every financial write path posts a journal entry unconditionally; if the GL post fails the source record is rolled back rather than left orphaned
+- `scripts/backfill-journal-entries.js` reports and repairs records created before this became mandatory (dry-run by default)
 
 ### Dashboard & Reporting
-- Financial overview: revenue, expenses, net profit, and outstanding balance — filterable by month, quarter, or year
+- Financial overview: **Cash In, Cash Out, Net Cash** (cash-basis, from the ledger) and outstanding balance — filterable by month, quarter, or year
 - Upcoming deadlines: overdue invoices, due-soon invoices, and annual Borang B filing reminder (30 April)
-- Cash flow projection: N-month forward view combining outstanding invoices, recurring entries, and historical averages
-- Excel/CSV export for invoices and expenses; full JSON backup and restore
+- Cash flow projection: N-month forward view built from outstanding invoices and active recurring templates
+- Excel/CSV export for invoices and expenses; JSON backup and restore (covers invoices, expenses, customers, payments and mileage — the ledger tables are not yet included, see Roadmap)
 
 ### Supporting Tools
 - **Bank reconciliation** — import CSV bank statements and match rows to invoices or expenses
-- **Mileage log** — track business trips with LHDN tiered deduction calculation (RM 0.60/km first 200 km, RM 0.40/km thereafter)
+- **Mileage log** — track business trips; deduction is `km × rate`, defaulting to RM 0.60/km (`MILEAGE_RATE_PER_KM`) and overridable per trip. This is the owner's own reasonable per-km estimate, **not** an LHDN-prescribed rate — LHDN publishes no per-km business deduction rate for a sole proprietor (see "Malaysian compliance notes" below). Mileage claims post to account `6410`, separate from actual vehicle receipts (`6400`); a Taxation/Mileage page warning flags months where both were used, since a per-km claim is meant to substitute for actual costs, not add to them
 - **Document storage** — attach PDF and image files to any record; in-app preview for images and PDFs; store locally, on AWS S3, or Google Drive
 - **Recurring templates** — auto-generate repeating invoices or expenses on a schedule
 - **Audit log** — all financial mutations are recorded with before/after snapshots
@@ -78,6 +87,8 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 | OCR | OpenAI GPT-4o Vision |
 | Authentication | JWT (single owner) |
 | Encryption | AES-256-CBC (for LHDN credentials at rest) |
+| API tests | `node:test` (built in — no test dependency) |
+| Browser tests | Playwright (Chromium) |
 
 ---
 
@@ -93,17 +104,21 @@ personal-accountant/
 │   │   ├── controllers/      # Request handlers
 │   │   ├── jobs/             # Agenda scheduled jobs
 │   │   ├── middlewares/      # JWT auth, error handler, audit log
-│   │   ├── migrations/       # Sequelize migrations (26 tables)
+│   │   ├── migrations/       # Sequelize migrations (27 tables)
 │   │   ├── models/           # Sequelize models (incl. Account, JournalEntry, JournalEntryLine, PaymentVoucher, PaymentVoucherLine)
 │   │   ├── routes/           # Route definitions (22 route files)
 │   │   ├── schemas/          # Zod validation schemas
-│   │   ├── seeders/          # Expense category seed data
-│   │   ├── services/         # Business logic (MyInvois, OCR, PDF, tax, GL, reports, AI accounting)
-│   │   └── templates/        # HTML templates for Gotenberg PDF (invoice, P&L, balance sheet, payment voucher, tax summary)
+│   │   ├── scripts/          # Operational scripts (backfill-journal-entries.js)
+│   │   ├── seeders/          # Expense categories, Chart of Accounts, non-deductible account
+│   │   ├── services/         # Business logic (MyInvois, OCR, PDF, tax, GL, LedgerQuery, reports, AI accounting)
+│   │   ├── templates/        # HTML templates for Gotenberg PDF (invoice, P&L, balance sheet, payment voucher, tax summary)
+│   │   └── tests/            # node:test unit tests for pure helpers
 │   │
 │   └── web/                  # React frontend (port 5173)
+│       ├── e2e/              # Playwright browser tests
+│       ├── playwright.config.js
 │       └── src/
-│           ├── components/   # AppShell, GLReviewModal, AddExpenseModal, PaymentVoucherModal, PaymentModal, ConfirmModal, AttachmentsPanel, OCRAssistantModal, CustomerQuickCreateModal
+│           ├── components/   # AppShell, GLReviewModal, AddExpenseModal, PaymentVoucherModal, PaymentModal, ConfirmModal, AttachmentsPanel, OCRAssistantModal, CustomerQuickCreateModal, ModuleIntro
 │           ├── context/      # AuthContext, AppSettingsContext
 │           ├── pages/        # One folder per route
 │           └── services/     # Axios API client with JWT interceptor
@@ -118,7 +133,8 @@ personal-accountant/
 │
 ├── docs/
 │   ├── local-setup.md        # Step-by-step environment setup guide
-│   └── development-plan.md   # Full module breakdown and architecture
+│   ├── development-plan.md   # Full module breakdown and architecture
+│   └── releases/             # Per-release changelogs (vX.Y.md)
 │
 ├── docker-compose.yml        # PostgreSQL, MongoDB, Gotenberg, API, Web
 ├── CLAUDE.md                 # AI coding assistant guidance
@@ -213,6 +229,20 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 ---
 
+## Running the tests
+
+```bash
+# API unit tests (node:test — no extra dependency)
+cd apps/api && npm test
+
+# Browser end-to-end tests (Playwright, Chromium)
+# Starts the API and web dev server automatically; needs Postgres up
+# and ADMIN_PASSWORD set in the repo-root .env
+cd apps/web && npm run e2e
+```
+
+---
+
 ## Documentation
 
 | Document | Description |
@@ -225,9 +255,10 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.4](docs/releases/v2.4.md) | 2026-08-10 | GL-sourced cash flow, dashboard & Borang B tax — Payment Vouchers now appear on every money surface; backfill tool; test suites added |
 | [v2.3](docs/releases/v2.3.md) | 2026-07-24 | Payment Voucher module — modal create, service-item lines, GL posting on save, printable PDF |
 | [v2.2](docs/releases/v2.2.md) | 2026-03-30 | Document preview modal, PDF/image-only upload constraint, mileage rounding fix |
-| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage, fix mileage deduction rate to match LHDN tiered schedule |
+| [v2.1](docs/releases/v2.1.md) | 2026-03-27 | Duplicate records for invoices/expenses/mileage; aligned the frontend mileage rate to the backend's RM 0.60/km |
 | [v2.0](docs/releases/v2.0.md) | 2026-03-27 | Chart of Accounts, General Ledger, P&L, Balance Sheet, AI-powered GL suggestions |
 | [v1.3](docs/releases/v1.3.md) | 2026-03-18 | Code quality, shared tax constants & minor fixes |
 | [v1.2](docs/releases/v1.2.md) | 2026-02-27 | Modal forms, detail pages, polymorphic attachments & 14 bug fixes |
@@ -240,7 +271,7 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 - **LHDN MyInvois**: Sandbox environment available for testing at `https://preprod-api.myinvois.hasil.gov.my`. Production credentials are configured through the app UI (Settings → E-Invoice), not the `.env` file.
 - **Borang B**: Tax calculations use AY2024/2025 progressive brackets (0%–30%). Tax bracket data lives in `packages/shared/src/constants/taxBrackets.js` and must be updated when LHDN announces changes.
-- **Mileage**: LHDN-approved tiered rate — RM 0.60/km for the first 200 km/month, RM 0.40/km thereafter.
+- **Mileage**: LHDN publishes no per-km mileage rate for a sole proprietor's business deduction. The RM0.60/km-tiered-to-RM0.30-after-200km figure sometimes quoted as "the LHDN mileage rate" is the Malaysian civil service rate (Pekeliling Perbendaharaan) for government staff claiming official travel — it does not apply to private businesses or the self-employed. For a sole proprietor the statutory basis is **actual costs apportioned by business use** under s.33(1) ITA 1967 (fuel, repairs, insurance, road tax, parking), substantiated by a logbook — there is no per-km shortcut. The app's `km × rate` figure (default RM 0.60/km via `MILEAGE_RATE_PER_KM`, overridable per trip) is the owner's own reasonable estimate for that apportionment, not an LHDN-prescribed rate. Because a per-km claim is meant to *substitute* for actual costs rather than add to them, mileage claims post to a separate GL account (`6410`) from actual vehicle receipts (`6400`), and the app warns when both were used in the same month — see Mileage and Taxation pages.
 - **GST/SST**: The system supports per-line tax rates on invoices. No hard-coded tax rate — the business owner sets the applicable rate per line item.
 - **Currency**: All financial records store the original currency and exchange rate alongside an `amount_myr` field for reporting. Reporting and Borang B calculations use the MYR value.
 
@@ -248,6 +279,10 @@ Open [http://localhost:5173](http://localhost:5173) and log in with your `ADMIN_
 
 ## Roadmap
 
+- [ ] Support actual-costs-apportioned mileage/vehicle deduction (s.33(1) ITA 1967 basis) as an alternative to the flat per-km estimate
+- [ ] Include the ledger tables (`accounts`, `journal_entries`, `journal_entry_lines`, `payment_vouchers`) in the JSON backup — since v2.4 these hold the money figures
+- [ ] Wire up debit note (`03`) and self-billed (`11`) e-invoice submission
+- [ ] Capital allowance handling for fixed assets (`is_capital_allowance` is stored but not applied)
 - [ ] Recurring expense management UI (backend already scaffolded)
 - [ ] Audit trail viewer page (`audit_logs` table is populated, no UI yet)
 - [ ] Live MYR exchange rates via a public API (currently manual input)

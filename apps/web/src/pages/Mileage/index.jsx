@@ -43,7 +43,10 @@ const HEADERS = [
 ];
 
 const PURPOSES = ['client_visit', 'business_meeting', 'site_inspection', 'purchase', 'bank', 'government_office', 'other'];
-const MY_MILEAGE_RATE = 0.60; // RM 0.60 per km (LHDN approved rate for first 200km/month)
+// RM 0.60/km is this owner's own reasonable per-km estimate, not an
+// LHDN-prescribed rate — LHDN publishes no per-km business deduction rate
+// for a sole proprietor. Overridable per trip; see README.md "Mileage log".
+const MY_MILEAGE_RATE = 0.60;
 
 const EMPTY_FORM = () => ({
   log_date: new Date().toISOString().slice(0, 10),
@@ -57,12 +60,18 @@ const EMPTY_FORM = () => ({
 
 const purposeLabel = (p) => (p || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
+const monthLabel = (yyyyMm) => {
+  const [y, m] = yyyyMm.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+};
+
 export default function MileagePage() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [logOpen, setLogOpen] = useState(false);
   const [viewEntry, setViewEntry] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
+  const [overlapMonths, setOverlapMonths] = useState([]);
 
   // Log trip form state
   const [form, setForm] = useState(EMPTY_FORM());
@@ -83,7 +92,19 @@ export default function MileagePage() {
     }
   };
 
-  useEffect(() => { fetchMileage(); }, []);
+  // Months where both actual vehicle receipts (6400) and mileage claims
+  // (6410) posted — the signal a trip may have been claimed under both
+  // bases. Informational only; never blocks logging or saving.
+  const fetchOverlap = async () => {
+    try {
+      const res = await api.get('/mileage/overlap');
+      setOverlapMonths(res.data.months || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => { fetchMileage(); fetchOverlap(); }, []);
 
   const openLog = () => {
     setForm(EMPTY_FORM());
@@ -122,6 +143,7 @@ export default function MileagePage() {
         journal_lines: journalLines,
       });
       fetchMileage();
+      fetchOverlap();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to log mileage');
     } finally {
@@ -141,6 +163,7 @@ export default function MileagePage() {
       await api.delete(`/mileage/${id}`);
       if (viewEntry && String(viewEntry.id) === String(id)) setViewEntry(null);
       fetchMileage();
+      fetchOverlap();
     } catch (err) {
       console.error('Failed to delete');
     }
@@ -167,6 +190,17 @@ export default function MileagePage() {
         <h1 className="page-title" style={{ margin: 0 }}>Mileage Log</h1>
         <Button renderIcon={Add} onClick={openLog}>Log Trip</Button>
       </div>
+
+      {overlapMonths.length > 0 && (
+        <InlineNotification
+          kind="warning"
+          lowContrast
+          title="Possible double-claimed vehicle costs"
+          subtitle={`Both fuel/maintenance receipts and mileage claims were recorded in ${overlapMonths.map(m => monthLabel(m.month)).join(', ')}. A per-km mileage claim substitutes for actual vehicle costs — claiming both for the same trip would deduct it twice. Review D5 before filing.`}
+          style={{ marginBottom: '1.5rem' }}
+          hideCloseButton
+        />
+      )}
 
       <div className="grid-3" style={{ marginBottom: '1.5rem' }}>
         <Tile style={{ padding: '1.25rem' }}>
@@ -244,7 +278,10 @@ export default function MileagePage() {
       )}
 
       <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: '#8d8d8d' }}>
-        * Mileage deduction: RM 0.60/km for the first 200km/month, RM 0.40/km thereafter, as per LHDN guidelines.
+        * Mileage deduction: km × rate, defaulting to RM 0.60/km and overridable per trip. This is a
+        reasonable per-km estimate, not an LHDN-prescribed rate — LHDN publishes no such rate for a
+        sole proprietor's business deduction. The statutory basis is actual costs (fuel, repairs,
+        insurance, road tax, parking) apportioned by business use, substantiated by a logbook.
       </p>
 
       {/* Log Trip Modal */}

@@ -3,13 +3,20 @@ import { verifyJwt } from '../middlewares/verifyJwt.js';
 import { MileageLog } from '../models/index.js';
 import { Op } from 'sequelize';
 import JournalEntryService from '../services/JournalEntryService.js';
+import LedgerQueryService from '../services/LedgerQueryService.js';
 
 const router = Router();
 router.use(verifyJwt);
 
-// Malaysian LHDN approved mileage rate (MYR per km) — as of 2024
-// First 200km per month: RM0.60/km; thereafter RM0.40/km
-// For simplicity we expose a configurable rate via env or default
+// LHDN publishes no per-km mileage rate for a sole proprietor's business
+// deduction — the statutory basis is actual costs (fuel, repairs, insurance,
+// road tax, parking) apportioned by business use under s.33(1) ITA 1967,
+// substantiated by a logbook. The RM0.60/RM0.30-tiered figure sometimes
+// quoted for "LHDN mileage" is the Malaysian civil service rate (Pekeliling
+// Perbendaharaan), which applies only to government staff claiming official
+// travel, not to private businesses. The rate below is this owner's own
+// reasonable per-km estimate, not an LHDN-prescribed figure — configurable
+// via env and overridable per trip. See README.md "Mileage log" for detail.
 const DEFAULT_RATE_PER_KM = parseFloat(process.env.MILEAGE_RATE_PER_KM || '0.60');
 
 // GET /mileage
@@ -121,6 +128,17 @@ router.get('/summary', async (req, res, next) => {
       tripCount: logs.length,
       byMonth: Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month)),
     });
+  } catch (err) { next(err); }
+});
+
+// GET /mileage/overlap?year=2026 — months where both actual vehicle
+// receipts (6400) and mileage claims (6410) posted activity: the signal
+// that a trip may have been claimed under both bases. Informational only.
+router.get('/overlap', async (req, res, next) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const months = await LedgerQueryService.getMileageOverlapByMonth(`${year}-01-01`, `${year}-12-31`);
+    res.json({ year, months });
   } catch (err) { next(err); }
 });
 

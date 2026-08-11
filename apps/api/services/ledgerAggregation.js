@@ -67,3 +67,39 @@ export function applySectionRules(sectionRows) {
   for (const sec of Object.keys(totals)) totals[sec] = toCents(totals[sec]);
   return totals;
 }
+
+// D5 (Motor Vehicle Expenses) is funded by two accounts that must never
+// overlap for the same trip: 6400 for actual receipts (fuel, maintenance,
+// toll/parking) and 6410 for per-km mileage claims. A per-km rate is meant
+// to *substitute* for actual costs, not add to them, so a month where both
+// accounts have posted activity is a signal — not proof — that the same
+// trip may have been claimed twice.
+export const VEHICLE_RECEIPTS_ACCOUNT_CODE = '6400';
+export const MILEAGE_CLAIM_ACCOUNT_CODE = '6410';
+
+/**
+ * Shapes `{ month, code, amount }` rows — one row per (month, account) pair
+ * — into the months where BOTH the receipts account and the mileage account
+ * have net-positive activity. Months where only one side is used are not
+ * overlap and are dropped.
+ */
+export function findMileageOverlapMonths(rows) {
+  const byMonth = {};
+  for (const row of rows || []) {
+    const month = row.month;
+    if (!month) continue;
+    if (!byMonth[month]) byMonth[month] = { month, receiptsTotal: 0, mileageTotal: 0 };
+    const amount = parseFloat(row.amount || 0);
+    if (row.code === VEHICLE_RECEIPTS_ACCOUNT_CODE) byMonth[month].receiptsTotal += amount;
+    else if (row.code === MILEAGE_CLAIM_ACCOUNT_CODE) byMonth[month].mileageTotal += amount;
+  }
+
+  return Object.keys(byMonth)
+    .filter((k) => byMonth[k].receiptsTotal > 0 && byMonth[k].mileageTotal > 0)
+    .sort((a, b) => a.localeCompare(b))
+    .map((k) => ({
+      month: k,
+      receiptsTotal: toCents(byMonth[k].receiptsTotal),
+      mileageTotal: toCents(byMonth[k].mileageTotal),
+    }));
+}

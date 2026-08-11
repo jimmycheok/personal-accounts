@@ -438,6 +438,23 @@ Covered within Module 01 (settings page with 4 tabs). Separate Agenda job (`poll
 
 ---
 
+## Specification Corrections (discovered during mileage tax-correctness fix, 2026-08-10)
+
+### The "LHDN tiered mileage rate" claim (v2.1 and earlier) was wrong
+The v2.1 correction above states the mileage rate should be "RM 0.60/km (first 200 km/month), RM 0.40/km thereafter, as per LHDN guidelines" — that claim does not survive scrutiny and is now removed from CLAUDE.md, README.md, and the app's own copy:
+- **LHDN publishes no per-km mileage rate** for a sole proprietor's business expense deduction. The per-km concept in LHDN's own material exists only for *employee reimbursement* (a reasonable rate is not a taxable perquisite under Public Ruling 3/2013) — a different question from what a sole proprietor may deduct.
+- The RM0.60-first-200km/RM0.40-thereafter figure is the **Malaysian civil service rate** (Pekeliling Perbendaharaan), for government staff claiming official travel — it applies exclusively to civil servants, not private businesses or the self-employed. Its actual second tier is **RM0.30/km**, not RM0.40.
+- For a sole proprietor the statutory basis is **actual costs apportioned by business use** under s.33(1) ITA 1967 — fuel, repairs, insurance, road tax, parking — substantiated by a logbook. There is no per-km shortcut.
+- The app's flat `km × rate` calculation is unchanged (default RM0.60/km via `MILEAGE_RATE_PER_KM`, overridable per trip) — it is now documented as the owner's own reasonable estimate, not an LHDN-prescribed figure. 200km tiering was deliberately **not** implemented — it is a civil-service rule that does not govern this taxpayer.
+
+### Mileage claims and actual vehicle receipts now post to separate GL accounts
+- New account `6410` Mileage Claim (seeder `20260806000002-mileage-claim-account.cjs`), alongside the existing `6400` Motor Vehicle Expenses. Both carry `borang_b_section: 'D5'`, so the split does not change any Borang B total.
+- `JournalEntryService.onMileageLogged` and `GLReviewModal`'s `mileage_create` template now debit `6410` instead of `6400`.
+- `JournalEntryService.getExpenseAccountBySection` now orders by `code ASC` so a D5 expense (Petrol/Fuel, Vehicle Maintenance, Toll & Parking) deterministically resolves to `6400`, not `6410`, now that two D5 expense accounts exist.
+- `LedgerQueryService.getMileageOverlapByMonth` flags months where both `6400` and `6410` have posted activity — a per-km claim is meant to substitute for actual costs, not add to them, so overlap signals a possible double-claim. Surfaced as a non-blocking warning on the Mileage and Taxation pages.
+
+---
+
 ## Release Log
 
 ### v1.3 — Code Quality, Shared Tax Constants & Minor Fixes (2026-03-18)
