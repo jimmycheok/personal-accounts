@@ -21,7 +21,7 @@ export default function AccountLedgerPage() {
   const [account, setAccount] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
-  const [to, setTo] = useState(new Date().toISOString().split('T')[0]);
+  const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const loadLedger = async () => {
     setLoading(true);

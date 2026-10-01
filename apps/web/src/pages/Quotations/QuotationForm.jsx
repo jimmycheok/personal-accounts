@@ -39,7 +39,7 @@ export default function QuotationFormPage() {
 
   const [form, setForm] = useState({
     customer_id: '',
-    issue_date: new Date().toISOString().slice(0, 10),
+    issue_date: format(new Date(), 'yyyy-MM-dd'),
     valid_until: '',
     notes: '',
     currency: 'MYR',

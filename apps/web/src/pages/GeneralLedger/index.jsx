@@ -47,7 +47,7 @@ export default function GeneralLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState('');
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
-  const [to, setTo] = useState(new Date().toISOString().split('T')[0]);
+  const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const loadEntries = async () => {
     setLoading(true);

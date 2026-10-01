@@ -48,7 +48,7 @@ const PURPOSES = ['client_visit', 'business_meeting', 'site_inspection', 'purcha
 const MY_MILEAGE_RATE = 0.60;
 
 const EMPTY_FORM = () => ({
-  log_date: new Date().toISOString().slice(0, 10),
+  log_date: format(new Date(), 'yyyy-MM-dd'),
   from_location: '',
   to_location: '',
   km: '',
@@ -195,7 +195,7 @@ export default function MileagePage() {
                                   <OverflowMenuItem itemText="View" onClick={() => setViewEntry(entry)} />
                                   <OverflowMenuItem itemText="Duplicate" onClick={() => {
                                     setForm({
-                                      log_date: new Date().toISOString().slice(0, 10),
+                                      log_date: format(new Date(), 'yyyy-MM-dd'),
                                       from_location: entry.from_location || '',
                                       to_location: entry.to_location || '',
                                       km: String(entry.km || ''),

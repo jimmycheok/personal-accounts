@@ -33,7 +33,7 @@ function Section({ title, color, items, totalLabel, totalValue }) {
 }
 
 export default function BalanceSheetPage() {
-  const [asAt, setAsAt] = useState(new Date().toISOString().split('T')[0]);
+  const [asAt, setAsAt] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

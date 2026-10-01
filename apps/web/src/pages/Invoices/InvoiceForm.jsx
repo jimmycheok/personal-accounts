@@ -56,7 +56,7 @@ export default function InvoiceFormPage() {
     return format(addDays(new Date(issueDate), Number(terms || 0)), 'yyyy-MM-dd');
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const [form, setForm] = useState({
     customer_id: '',
     issue_date: todayStr,

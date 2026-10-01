@@ -15,7 +15,7 @@ import GLReviewModal from './GLReviewModal.jsx';
 export default function PaymentModal({ open, onClose, invoiceId, invoiceNumber, amountDue, onSuccess }) {
   const [form, setForm] = useState({
     amount: amountDue,
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: format(new Date(), 'yyyy-MM-dd'),
     payment_method: 'bank_transfer',
     reference: '',
     notes: '',
@@ -29,7 +29,7 @@ export default function PaymentModal({ open, onClose, invoiceId, invoiceNumber, 
     if (open) {
       setForm({
         amount: amountDue,
-        payment_date: new Date().toISOString().slice(0, 10),
+        payment_date: format(new Date(), 'yyyy-MM-dd'),
         payment_method: 'bank_transfer',
         reference: '',
         notes: '',
