@@ -35,7 +35,7 @@ function computeTotal(lines) {
   return (lines || []).reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
 }
 
-const LINE_INCLUDE = { model: PaymentVoucherLine, as: 'lines' };
+const LINE_INCLUDE = { model: PaymentVoucherLine, as: 'lines', separate: true, order: [['id', 'ASC']] };
 
 export async function list(req, res, next) {
   try {

@@ -14,7 +14,7 @@ const titleCase = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperC
 
 const EMPTY_LINE = () => ({ service_item: '', amount: '' });
 const EMPTY_FORM = () => ({
-  pv_date: new Date().toISOString().slice(0, 10),
+  pv_date: format(new Date(), 'yyyy-MM-dd'),
   payee_name: '', payee_bank_name: '', payee_bank_account: '', payee_tin: '',
   payment_method: 'bank_transfer', payment_reference: '', description: '', notes: '',
 });
@@ -28,7 +28,6 @@ export default function PaymentVoucherModal({ open, onClose, onSuccess, prefill 
   const [showGL, setShowGL] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Reset on close
   useEffect(() => {
     if (!open) {
       setForm(EMPTY_FORM());
@@ -37,11 +36,7 @@ export default function PaymentVoucherModal({ open, onClose, onSuccess, prefill 
       setError('');
       setShowGL(false);
       setSaving(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (open && prefill) {
+    } else if (prefill) {
       const { lines: prefillLines, ...fields } = prefill;
       setForm({ ...EMPTY_FORM(), ...fields });
       if (prefillLines?.length) setLines(prefillLines);

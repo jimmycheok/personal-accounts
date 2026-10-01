@@ -149,7 +149,7 @@ export default function PaymentVouchersPage() {
       <PaymentVoucherModal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setDuplicatePrefill(null); }}
-        onSuccess={() => { setModalOpen(false); setDuplicatePrefill(null); load(); }}
+        onSuccess={load}
         prefill={duplicatePrefill}
       />
     </div>
