@@ -549,3 +549,16 @@ The 2026-08-10 fix correctly identified that LHDN publishes no per-km rate and t
 
 ### The payment voucher no longer carries signature lines
 Prepared/Approved/Received signature lines were replaced with "This payment voucher is computer generated. No signature is required."
+
+---
+
+## Specification Corrections (discovered during v2.7 dev, 2026-10-01)
+
+### Payment vouchers can be duplicated
+The list's row menu gains **Duplicate**, which opens `PaymentVoucherModal` with a new optional `prefill` prop (`{ ...formFields, lines }`). It copies payee, bank, bank account, TIN, payment method, description, notes and service items. It deliberately does **not** copy the date, the payment reference, attachments or the GL entry; the GL Review modal still runs on save.
+
+### Payment voucher lines are returned in entry order
+`LINE_INCLUDE` had no `ORDER BY`, so Postgres returned lines in heap order. It now uses `separate: true, order: [['id', 'ASC']]`, which covers every voucher response that includes lines, including the PDF.
+
+### Default dates were the UTC date
+`new Date().toISOString().slice(0, 10)` is the **UTC** date: yesterday in Malaysia between 00:00 and 07:59. For payment vouchers that meant the previous month's `PV-YYYYMM` number and GL period when created early on the 1st. The voucher modal now uses `format(new Date(), 'yyyy-MM-dd')`. The same pattern in other forms and date ranges is fixed separately (`fix/local-date-defaults`).
