@@ -19,7 +19,7 @@ const EMPTY_FORM = () => ({
   payment_method: 'bank_transfer', payment_reference: '', description: '', notes: '',
 });
 
-export default function PaymentVoucherModal({ open, onClose, onSuccess }) {
+export default function PaymentVoucherModal({ open, onClose, onSuccess, prefill }) {
   const [form, setForm] = useState(EMPTY_FORM());
   const [lines, setLines] = useState([EMPTY_LINE()]);
   const [stagedFiles, setStagedFiles] = useState([]);
@@ -39,6 +39,14 @@ export default function PaymentVoucherModal({ open, onClose, onSuccess }) {
       setSaving(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (open && prefill) {
+      const { lines: prefillLines, ...fields } = prefill;
+      setForm({ ...EMPTY_FORM(), ...fields });
+      if (prefillLines?.length) setLines(prefillLines);
+    }
+  }, [open, prefill]);
 
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
   const updateLine = (idx, key, val) => setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, [key]: val } : l)));
