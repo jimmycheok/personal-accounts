@@ -105,11 +105,11 @@ personal-accountant/
 │   │   ├── controllers/      # Request handlers
 │   │   ├── jobs/             # Agenda scheduled jobs
 │   │   ├── middlewares/      # JWT auth, error handler, audit log
-│   │   ├── migrations/       # Sequelize migrations (27 tables)
+│   │   ├── migrations/       # Sequelize migrations (26 tables)
 │   │   ├── models/           # Sequelize models (incl. Account, JournalEntry, JournalEntryLine, PaymentVoucher, PaymentVoucherLine)
 │   │   ├── routes/           # Route definitions (22 route files)
 │   │   ├── schemas/          # Zod validation schemas
-│   │   ├── scripts/          # Operational scripts (backfill-journal-entries.js)
+│   │   ├── scripts/          # Operational scripts (backfill-journal-entries.js, remove-mileage-journal-entries.js)
 │   │   ├── seeders/          # Expense categories, Chart of Accounts, non-deductible account
 │   │   ├── services/         # Business logic (MyInvois, OCR, PDF, tax, GL, LedgerQuery, reports, AI accounting)
 │   │   ├── templates/        # HTML templates for Gotenberg PDF (invoice, P&L, balance sheet, payment voucher, tax summary)
@@ -156,7 +156,7 @@ personal-accountant/
 | `/credit-notes` | Credit note issuance and LHDN submission |
 | `/credit-notes/:id` | Credit note detail with status actions and file attachments |
 | `/expenses` | Expense list with view modal and inline attachment support; AI receipt scan via header |
-| `/payment-vouchers` | Payment voucher list; "New Payment Voucher" opens a modal (service items + GL posting on save) |
+| `/payment-vouchers` | Payment voucher list; "New Payment Voucher" opens a modal (service items + GL posting on save); row menu Duplicate opens it prefilled |
 | `/payment-vouchers/:id` | Voucher detail with service items, linked GL entry, PDF download, void, and attachments |
 | `/taxation` | Borang B summary, relief inputs, tax estimate, PDF export |
 | `/cash-flow` | Projected vs actual cash flow line chart |
@@ -256,6 +256,7 @@ cd apps/web && npm run e2e
 
 | Version | Date | Summary |
 |---|---|---|
+| [v2.7](docs/releases/v2.7.md) | 2026-10-01 | Duplicate payment vouchers from the list; voucher date defaults to the local day, not UTC; voucher lines keep their entry order |
 | [v2.6](docs/releases/v2.6.md) | 2026-08-11 | Mileage becomes a logbook only (no journal entry, no deduction); voucher PDF address and signature block fixed; unresolved template placeholders no longer leak into PDFs |
 | [v2.5](docs/releases/v2.5.md) | 2026-08-11 | Mileage split to its own D5 account with double-claim detection, corrected the false "LHDN tiered rate" claim, fixed the payment voucher PDF download |
 | [v2.4](docs/releases/v2.4.md) | 2026-08-10 | GL-sourced cash flow, dashboard & Borang B tax — Payment Vouchers now appear on every money surface; backfill tool; test suites added |
