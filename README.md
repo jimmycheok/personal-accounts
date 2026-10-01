@@ -10,7 +10,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Create quotations and convert accepted ones directly into invoices
 - Generate professional PDF invoices with embedded DuitNow QR codes for instant payment
 - Record partial or full payments; invoices auto-mark as paid when settled
-- Duplicate any invoice, expense, or mileage entry — opens a pre-filled create form for quick review before saving
+- Duplicate any invoice, expense, mileage entry, or payment voucher — opens a pre-filled create form for quick review before saving
 - Issue credit notes linked to original invoices
 - Auto-generate sequential invoice/quotation numbers with configurable prefixes
 
@@ -51,6 +51,7 @@ An all-in-one accounting system built for a single Malaysian sole proprietor. Ha
 - Create from a modal with a free-text **service-item** table (item + amount) and staged file attachments
 - On save, the GL Review modal posts a balanced journal entry immediately — defaulting to DR Salaries & Wages (`6100`) / CR the payment-method account (Bank `1010` or Cash `1000`) — and the voucher is marked posted
 - Void reverses the journal entry
+- Duplicate copies the payee, bank details, description, notes and service items into a new voucher; the date resets to today and the payment reference starts blank. Attachments and the GL entry are not copied
 - Downloads a printable PDF voucher (`PV-YYYYMM-NNNN.pdf`) with amount-in-words and a "computer generated, no signature required" note
 
 ### GL-Sourced Money Figures (v2.4)

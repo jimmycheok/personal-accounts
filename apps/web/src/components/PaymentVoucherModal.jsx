@@ -14,12 +14,12 @@ const titleCase = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperC
 
 const EMPTY_LINE = () => ({ service_item: '', amount: '' });
 const EMPTY_FORM = () => ({
-  pv_date: new Date().toISOString().slice(0, 10),
+  pv_date: format(new Date(), 'yyyy-MM-dd'),
   payee_name: '', payee_bank_name: '', payee_bank_account: '', payee_tin: '',
   payment_method: 'bank_transfer', payment_reference: '', description: '', notes: '',
 });
 
-export default function PaymentVoucherModal({ open, onClose, onSuccess }) {
+export default function PaymentVoucherModal({ open, onClose, onSuccess, prefill }) {
   const [form, setForm] = useState(EMPTY_FORM());
   const [lines, setLines] = useState([EMPTY_LINE()]);
   const [stagedFiles, setStagedFiles] = useState([]);
@@ -28,7 +28,6 @@ export default function PaymentVoucherModal({ open, onClose, onSuccess }) {
   const [showGL, setShowGL] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Reset on close
   useEffect(() => {
     if (!open) {
       setForm(EMPTY_FORM());
@@ -37,8 +36,12 @@ export default function PaymentVoucherModal({ open, onClose, onSuccess }) {
       setError('');
       setShowGL(false);
       setSaving(false);
+    } else if (prefill) {
+      const { lines: prefillLines, ...fields } = prefill;
+      setForm({ ...EMPTY_FORM(), ...fields });
+      if (prefillLines?.length) setLines(prefillLines);
     }
-  }, [open]);
+  }, [open, prefill]);
 
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
   const updateLine = (idx, key, val) => setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, [key]: val } : l)));

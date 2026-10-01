@@ -21,6 +21,7 @@ export default function PaymentVouchersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [duplicatePrefill, setDuplicatePrefill] = useState(null);
 
   const load = () => {
     api.get('/payment-vouchers', { params: { search: search || undefined, limit: 500 } })
@@ -33,6 +34,26 @@ export default function PaymentVouchersPage() {
   const handleDelete = async (id) => {
     try { await api.delete(`/payment-vouchers/${id}`); load(); }
     catch (err) { setError(err.response?.data?.error || 'Delete failed'); }
+  };
+
+  // Date resets to today and the payment reference is left blank — both belong to the new payment.
+  const handleDuplicate = async (id) => {
+    try {
+      const { data: v } = await api.get(`/payment-vouchers/${id}`);
+      setDuplicatePrefill({
+        payee_name: v.payee_name || '',
+        payee_bank_name: v.payee_bank_name || '',
+        payee_bank_account: v.payee_bank_account || '',
+        payee_tin: v.payee_tin || '',
+        payment_method: v.payment_method || 'bank_transfer',
+        description: v.description || '',
+        notes: v.notes || '',
+        lines: (v.lines || []).map(l => ({ service_item: l.service_item || '', amount: String(l.amount ?? '') })),
+      });
+      setModalOpen(true);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load voucher to duplicate');
+    }
   };
 
   const rows = vouchers.map(v => ({
@@ -103,6 +124,7 @@ export default function PaymentVouchersPage() {
                             <TableCell key={cell.id} onClick={(e) => e.stopPropagation()}>
                               <OverflowMenu flipped aria-label="Actions">
                                 <OverflowMenuItem itemText="View" onClick={() => navigate(`/payment-vouchers/${row.id}`)} />
+                                <OverflowMenuItem itemText="Duplicate" onClick={() => handleDuplicate(row.id)} />
                                 {v.status === 'draft' && <OverflowMenuItem isDelete itemText="Delete" onClick={() => handleDelete(row.id)} />}
                               </OverflowMenu>
                             </TableCell>
@@ -126,8 +148,9 @@ export default function PaymentVouchersPage() {
 
       <PaymentVoucherModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSuccess={() => { setModalOpen(false); load(); }}
+        onClose={() => { setModalOpen(false); setDuplicatePrefill(null); }}
+        onSuccess={load}
+        prefill={duplicatePrefill}
       />
     </div>
   );
