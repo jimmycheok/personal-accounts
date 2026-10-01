@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import {
   Tile,
   Select,
@@ -48,8 +49,8 @@ export default function CashFlowPage() {
   useEffect(() => {
     setLoading(true);
     const now = new Date();
-    const to = now.toISOString().slice(0, 10);
-    const from = new Date(now.getFullYear(), now.getMonth() - (Number(months) - 1), 1).toISOString().slice(0, 10);
+    const to = format(now, 'yyyy-MM-dd');
+    const from = format(new Date(now.getFullYear(), now.getMonth() - (Number(months) - 1), 1), 'yyyy-MM-dd');
     api.get(`/cash-flow/actual?from=${from}&to=${to}`)
       .then(res => {
         const cashFlowData = res.data.monthly || res.data;

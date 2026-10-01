@@ -24,7 +24,7 @@ const EMPTY_FORM = () => ({
   vendor_name: '',
   description: '',
   amount: '',
-  expense_date: new Date().toISOString().slice(0, 10),
+  expense_date: format(new Date(), 'yyyy-MM-dd'),
   category_id: '',
   notes: '',
   currency: 'MYR',

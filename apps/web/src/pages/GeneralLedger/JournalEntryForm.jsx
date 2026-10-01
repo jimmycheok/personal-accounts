@@ -32,7 +32,7 @@ export default function JournalEntryFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [entryDate, setEntryDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [description, setDescription] = useState('');
   const [sourceType, setSourceType] = useState('');
   const [sourceId, setSourceId] = useState('');
